@@ -1,0 +1,16 @@
+# k8s/product-service/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+  labels:
+    app: product-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8500
+    targetPort: 8500
+    protocol: TCP
+    name: http
+  selector:
+    app: product-service
