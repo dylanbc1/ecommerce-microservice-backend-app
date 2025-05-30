@@ -1,0 +1,51 @@
+# Configuración del proyecto Taller 2
+project:
+  name: "ecommerce-microservices-taller2"
+  version: "1.0.0"
+  description: "Implementación simplificada del Taller 2"
+
+microservices:
+  - name: "api-gateway"
+    port: 8080
+    health_path: "/actuator/health"
+  - name: "proxy-client"
+    port: 8900
+    health_path: "/actuator/health"
+  - name: "user-service"
+    port: 8700
+    health_path: "/actuator/health"
+  - name: "product-service"
+    port: 8500
+    health_path: "/actuator/health"
+  - name: "order-service"
+    port: 8300
+    health_path: "/actuator/health"
+  - name: "payment-service"
+    port: 8400
+    health_path: "/actuator/health"
+
+environments:
+  dev:
+    namespace: "ecommerce-dev"
+    replicas: 1
+  stage:
+    namespace: "ecommerce-stage"
+    replicas: 2
+  prod:
+    namespace: "ecommerce-prod"
+    replicas: 3
+
+testing:
+  performance:
+    light:
+      users: 10
+      spawn_rate: 1
+      duration: 60
+    standard:
+      users: 20
+      spawn_rate: 2
+      duration: 120
+    stress:
+      users: 50
+      spawn_rate: 5
+      duration: 300
