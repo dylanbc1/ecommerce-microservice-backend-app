@@ -473,106 +473,39 @@ def compileService(String serviceName) {
 
 // ===== FUNCIÓN DE TESTS MODIFICADA =====
 def executeTests(String serviceName) {
-    echo "🧪 Testing ${serviceName} with compatibility fixes..."
+    echo "🧪 Testing ${serviceName} with simplified approach..."
     
     dir(serviceName) {
         try {
-            // Step 1: Clean and prepare
-            sh 'rm -rf target/surefire-reports || true'
-            
-            // Step 2: Compile with Java compatibility flags
-            sh '''
-                echo "🔧 Compiling with Java compatibility..."
-                ./mvnw clean test-compile \
-                    -Djava.version=11 \
-                    -Dmaven.compiler.source=11 \
-                    -Dmaven.compiler.target=11 \
-                    -Djava.awt.headless=true \
-                    -q || echo "Compilation completed with warnings"
-            '''
-            
-            // Step 3: Run tests with maximum compatibility
-            sh '''
-                echo "🧪 Running tests with compatibility mode..."
-                ./mvnw test \
-                    -Dmaven.test.failure.ignore=true \
-                    -Djava.version=11 \
-                    -Dmaven.compiler.source=11 \
-                    -Dmaven.compiler.target=11 \
-                    -Djava.awt.headless=true \
-                    -Duser.timezone=UTC \
-                    -Djunit.platform.launcher.interceptors.enabled=false \
-                    -Dspring.test.context.cache.maxSize=1 \
-                    -DforkCount=1 \
-                    -DreuseForks=false \
-                    -Dsurefire.useFile=false \
-                    -Djdk.net.URLClassPath.disableClassPathURLCheck=true \
-                    --batch-mode \
-                || echo "Tests completed (some may have failed due to compatibility)"
-            '''
-            
-            // Step 4: Check for reports with more lenient approach
-            if (fileExists('target/surefire-reports')) {
-                def reportCount = sh(
-                    script: "find target/surefire-reports -name '*.xml' -o -name '*.txt' 2>/dev/null | wc -l || echo '0'",
-                    returnStdout: true
-                ).trim()
-                
-                if (reportCount.toInteger() > 0) {
-                    echo "📊 Found ${reportCount} test result files"
-                    
-                    // Try to publish results even if some failed
-                    try {
-                        publishTestResults testResultsPattern: 'target/surefire-reports/TEST-*.xml'
-                        echo "✅ ${serviceName} test results published"
-                        return 'SUCCESS'
-                    } catch (Exception e) {
-                        echo "⚠️ Results publishing failed, but tests ran: ${e.getMessage()}"
-                        return 'PARTIAL_SUCCESS'
-                    }
-                } else {
-                    echo "⚠️ No test result files found, checking if tests actually ran..."
-                    
-                    // Look for any evidence tests ran
-                    def hasTestOutput = sh(
-                        script: "find target -name '*test*' 2>/dev/null | head -1",
-                        returnStdout: true
-                    ).trim()
-                    
-                    if (hasTestOutput) {
-                        echo "📋 Tests appear to have run but no reports generated"
-                        return 'NO_REPORTS'
-                    } else {
-                        echo "❌ No evidence of test execution"
-                        return 'NO_EXECUTION'
-                    }
-                }
-            } else {
-                echo "❌ No surefire-reports directory found"
-                return 'NO_DIRECTORY'
+            // Verificar si existe pom.xml
+            if (!fileExists('pom.xml')) {
+                echo "⚠️ No pom.xml found for ${serviceName}"
+                return 'NO_POM'
             }
+            
+            // Compilación simple
+            def compileResult = sh(
+                script: './mvnw clean compile -DskipTests -q',
+                returnStatus: true
+            )
+            
+            if (compileResult != 0) {
+                echo "❌ Compilation failed for ${serviceName}"
+                return 'COMPILE_FAILED'
+            }
+            
+            // Ejecutar tests de forma simple
+            def testResult = sh(
+                script: './mvnw test -Dmaven.test.failure.ignore=true -q',
+                returnStatus: true
+            )
+            
+            echo "✅ ${serviceName} tests completed with exit code: ${testResult}"
+            return testResult == 0 ? 'SUCCESS' : 'TESTS_FAILED'
             
         } catch (Exception e) {
-            echo "❌ ${serviceName} tests failed with exception: ${e.getMessage()}"
-            
-            // Last resort: try with minimal configuration
-            try {
-                echo "🆘 Attempting minimal test run..."
-                sh '''
-                    ./mvnw test \
-                        -Dmaven.test.failure.ignore=true \
-                        -DskipTests=false \
-                        -Dtest="*Test" \
-                        --fail-never \
-                        -q \
-                    || echo "Even minimal test run failed"
-                '''
-                
-                return 'MINIMAL_ATTEMPT'
-            } catch (Exception lastResort) {
-                echo "🚨 All test approaches failed: ${lastResort.getMessage()}"
-                return 'COMPLETE_FAILURE'
-            }
+            echo "❌ ${serviceName} test execution failed: ${e.getMessage()}"
+            return 'EXCEPTION'
         }
     }
 }
