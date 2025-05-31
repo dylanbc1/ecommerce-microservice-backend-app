@@ -17,9 +17,12 @@
     <name>user-service</name>
     <description>Spring Boot microservice for user management</description>
     <packaging>jar</packaging>
+	
+	
     
     <properties>
         <java.version>17</java.version>
+		<lombok.version>1.18.24</lombok.version>
         <spring-cloud.version>2023.0.0</spring-cloud.version>
         <testcontainers.version>1.19.0</testcontainers.version>
         <maven.compiler.plugin.version>3.11.0</maven.compiler.plugin.version>
@@ -71,11 +74,12 @@
         </dependency>
         
         <!-- Lombok -->
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <optional>true</optional>
-        </dependency>
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<version>1.18.24</version>
+			<scope>provided</scope>
+		</dependency>
         
         <!-- Test -->
         <dependency>
@@ -118,6 +122,13 @@
                 <configuration>
                     <source>${java.version}</source>
                     <target>${java.version}</target>
+					<annotationProcessorPaths>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+							<version>1.18.24</version>
+						</path>
+					</annotationProcessorPaths>
                     <compilerArgs>
                         <arg>-parameters</arg>
                     </compilerArgs>
