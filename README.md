@@ -117,20 +117,7 @@ ecommerce-microservices-taller2/
 
 ### Configuración del Pipeline
 
-El pipeline DEV se enfoca en la construcción y despliegue rápido para desarrollo:
-
-```groovy
-stage('Deploy to Environment') {
-    steps {
-        script {
-            def namespace = getNamespaceForEnvironment(params.ENVIRONMENT)
-            sh "kubectl create namespace ${namespace} --dry-run=client -o yaml | kubectl apply -f -"
-            deployAllServices(namespace, params.BUILD_TAG)
-            sh "kubectl wait --for=condition=available --timeout=300s deployment --all -n ${namespace}"
-        }
-    }
-}
-```
+El pipeline DEV se enfoca en la construcción y despliegue rápido para desarrollo
 
 ### Características del Pipeline DEV
 
@@ -143,11 +130,15 @@ stage('Deploy to Environment') {
 
 | Etapa | Duración | Estado | Descripción |
 |-------|----------|--------|-------------|
-| Checkout | 15s | ✅ | Descarga código fuente |
-| Build Paralelo | 3m 20s | ✅ | Construcción de 6 servicios |
-| Docker Build | 2m 10s | ✅ | Creación de imágenes |
-| Deploy DEV | 45s | ✅ | Despliegue en Kubernetes |
-| Health Check | 30s | ✅ | Verificación de servicios |
+| Checkout | 0.77s | ✅ | Descarga código fuente |
+| Environment Setup | 2.5s | ✅ | Setup de entorno |
+| Infrastructure Validation | 0.53s | ✅ | Validación de infraestructura |
+| Compilation & Build | 2m 1s | ✅ | Build de servicios |
+| Quality Assurance | 2m 44s | ✅ | Ejecución de tests |
+| Container Building | 1m 19s | ✅ | Creación de imágenes |
+| Deployment Orchestration | 1.1s | ✅ | Despliegue en Kubernetes |
+| Release Documentation | 0.82s | ✅ | Generación de artefactos |
+| Post Actions | 2.2s | ✅ | Acciones de posteo |
 
 **Total Pipeline DEV: ~6 minutos**
 
@@ -159,7 +150,6 @@ stage('Deploy to Environment') {
 
 #### 1. UserServiceImplTest.java
 **Objetivo**: Validar operaciones CRUD de usuarios  
-**Cobertura**: 85%  
 **Casos de prueba**:
 - ✅ Creación de usuario con datos válidos
 - ✅ Búsqueda de usuario por ID existente
@@ -167,27 +157,8 @@ stage('Deploy to Environment') {
 - ✅ Actualización de información de usuario
 - ✅ Eliminación de usuario
 
-```java
-@Test
-void testCreateUser_ShouldReturnUserDto_WhenValidDataProvided() {
-    // Given
-    UserDto inputDto = createValidUserDto();
-    User savedUser = createMockUser();
-    when(userRepository.save(any(User.class))).thenReturn(savedUser);
-
-    // When
-    UserDto result = userService.save(inputDto);
-
-    // Then
-    assertNotNull(result);
-    assertEquals("testuser", result.getUsername());
-    verify(userRepository, times(1)).save(any(User.class));
-}
-```
-
 #### 2. ProductServiceImplTest.java
 **Objetivo**: Validar gestión de catálogo de productos  
-**Cobertura**: 88%  
 **Casos de prueba**:
 - ✅ Búsqueda de producto por ID
 - ✅ Listado de todos los productos
@@ -197,7 +168,6 @@ void testCreateUser_ShouldReturnUserDto_WhenValidDataProvided() {
 
 #### 3. OrderServiceImplTest.java
 **Objetivo**: Validar lógica de negocio de órdenes  
-**Cobertura**: 82%  
 **Casos de prueba**:
 - ✅ Cálculo correcto de total de orden
 - ✅ Validación de productos en stock
@@ -205,19 +175,15 @@ void testCreateUser_ShouldReturnUserDto_WhenValidDataProvided() {
 - ✅ Cambio de estado de orden
 - ✅ Cancelación de orden
 
-#### 4. PaymentServiceImplTest.java
-**Objetivo**: Validar procesamiento de pagos  
-**Cobertura**: 90%  
+#### 4. UserServiceApplicationTests.java
+**Objetivo**: Validar procesamiento de usuarios  
 **Casos de prueba**:
-- ✅ Procesamiento exitoso de pago
-- ✅ Manejo de pagos rechazados
-- ✅ Validación de métodos de pago
-- ✅ Cálculo de comisiones
-- ✅ Reembolsos
+- ✅ Manejo de usuarios
+- ✅ Cálculo de usuarios
+- ✅ CRUD
 
-#### 5. ProxyClientControllerTest.java
-**Objetivo**: Validar comunicación entre servicios  
-**Cobertura**: 75%  
+#### 5. OrderServiceApplicationTests.java
+**Objetivo**: Validar ordenes  
 **Casos de prueba**:
 - ✅ Llamadas exitosas a servicios downstream
 - ✅ Manejo de timeouts
@@ -225,35 +191,13 @@ void testCreateUser_ShouldReturnUserDto_WhenValidDataProvided() {
 - ✅ Retry logic
 - ✅ Load balancing
 
-### Resultados Pruebas Unitarias
-```
-Tests run: 47, Failures: 0, Errors: 0, Skipped: 2
-Coverage: 84.2%
-Duration: 2m 15s
-```
-
+  
 ### Pruebas de Integración (5 implementadas)
 
 #### 1. UserServiceIntegrationTest.java
 **Objetivo**: Validar API REST completa de usuarios  
 **Tipo**: SpringBootTest con TestRestTemplate  
 **Alcance**: Operaciones CRUD vía HTTP
-
-```java
-@Test
-void testCreateUser_ShouldReturnCreatedUser_WhenValidDataProvided() {
-    // Given
-    UserDto userDto = createTestUserDto();
-    
-    // When
-    ResponseEntity<UserDto> response = restTemplate.postForEntity(
-        createURLWithPort("/api/users"), userDto, UserDto.class);
-    
-    // Then
-    assertEquals(HttpStatus.CREATED, response.getStatusCode());
-    assertNotNull(response.getBody().getId());
-}
-```
 
 #### 2. ProductServiceIntegrationTest.java
 **Objetivo**: Validar API de productos con base de datos  
@@ -275,47 +219,28 @@ void testCreateUser_ShouldReturnCreatedUser_WhenValidDataProvided() {
 **Tipo**: Integration test con múltiples servicios  
 **Alcance**: Enrutamiento y balanceo de carga
 
-### Resultados Pruebas de Integración
-```
-Tests run: 23, Failures: 0, Errors: 0, Skipped: 1
-Average response time: 145ms
-Duration: 4m 32s
-```
-
 ### Pruebas End-to-End (5 implementadas)
 
 #### 1. UserRegistrationE2ETest.java
 **Flujo**: Registro → Login → Acceso a recursos protegidos  
-**Duración**: 45s  
 **Servicios involucrados**: api-gateway, user-service, proxy-client
 
 #### 2. ProductPurchaseE2ETest.java
 **Flujo**: Buscar producto → Añadir al carrito → Crear orden → Procesar pago  
-**Duración**: 1m 20s  
 **Servicios involucrados**: Todos los 6 microservicios
 
 #### 3. OrderWorkflowE2ETest.java
 **Flujo**: Crear orden → Validar stock → Reservar productos → Confirmar orden  
-**Duración**: 55s  
 **Servicios involucrados**: order-service, product-service, user-service
 
 #### 4. CartManagementE2ETest.java
 **Flujo**: Añadir productos → Modificar cantidades → Eliminar items → Checkout  
-**Duración**: 1m 10s  
 **Servicios involucrados**: user-service, product-service, order-service
 
 #### 5. UserProfileManagementE2ETest.java
 **Flujo**: Crear perfil → Actualizar datos → Ver órdenes → Cambiar preferencias  
-**Duración**: 40s  
 **Servicios involucrados**: user-service, order-service
 
-### Resultados Pruebas E2E
-```
-Scenarios: 5 passed, 0 failed
-Steps: 47 passed, 0 failed, 2 skipped
-Total duration: 5m 30s
-Success rate: 100%
-```
 
 ### Pruebas de Rendimiento con Locust
 
@@ -395,28 +320,6 @@ Requests per Second: 23.7 RPS
 
 El pipeline STAGE incluye todas las pruebas y validaciones antes de producción:
 
-```groovy
-stage('Integration Tests') {
-    when { 
-        allOf {
-            not { params.SKIP_TESTS }
-            anyOf {
-                params.ENVIRONMENT == 'stage'
-                params.ENVIRONMENT == 'master'
-            }
-        }
-    }
-    steps {
-        script {
-            dir('proxy-client') {
-                sh './mvnw test -Dtest=*IntegrationTest -Dspring.profiles.active=integration'
-                publishTestResults testResultsPattern: 'target/surefire-reports/*.xml'
-            }
-        }
-    }
-}
-```
-
 ### Flujo del Pipeline STAGE
 
 1. **Checkout**: Obtención del código fuente
@@ -428,29 +331,21 @@ stage('Integration Tests') {
 7. **Health Checks**: Verificación de servicios
 8. **Smoke Tests**: Pruebas básicas de funcionalidad
 
-### Configuración Específica STAGE
-
-```yaml
-# Namespace: ecommerce-stage
-# Replicas: 2 por servicio
-# Resources:
-#   requests: memory=256Mi, cpu=250m
-#   limits: memory=512Mi, cpu=500m
-# Environment: staging
-```
-
 ### Resultados Pipeline STAGE
 
-| Etapa | Duración | Estado | Cobertura/Éxito |
-|-------|----------|--------|-----------------|
-| Unit Tests | 2m 15s | ✅ | 84.2% cobertura |
-| Integration Tests | 4m 32s | ✅ | 23/23 pruebas ✅ |
-| Build & Package | 3m 20s | ✅ | 6 servicios ✅ |
-| Docker Build | 2m 45s | ✅ | 6 imágenes ✅ |
-| Deploy STAGE | 1m 15s | ✅ | 12 pods ready |
-| Health Checks | 45s | ✅ | 6/6 servicios ✅ |
+| Etapa | Duración | Estado | Descripción |
+|-------|----------|--------|-------------|
+| Checkout | 0.77s | ✅ | Descarga código fuente |
+| Environment Setup | 2.5s | ✅ | Setup de entorno |
+| Infrastructure Validation | 0.53s | ✅ | Validación de infraestructura |
+| Compilation & Build | 2m 1s | ✅ | Build de servicios |
+| Quality Assurance | 2m 44s | ✅ | Ejecución de tests |
+| Container Building | 1m 19s | ✅ | Creación de imágenes |
+| Deployment Orchestration | 1.1s | ✅ | Despliegue en Kubernetes |
+| Release Documentation | 0.82s | ✅ | Generación de artefactos |
+| Post Actions | 2.2s | ✅ | Acciones de posteo |
 
-**Total Pipeline STAGE: ~14 minutos**
+**Total Pipeline STAGE: ~6 minutos**
 
 ---
 
@@ -459,35 +354,6 @@ stage('Integration Tests') {
 ### Características del Pipeline MASTER
 
 El pipeline MASTER (Producción) incluye todas las validaciones y pruebas completas:
-
-```groovy
-stage('Performance Tests') {
-    when { 
-        allOf {
-            not { params.SKIP_TESTS }
-            not { params.SKIP_PERFORMANCE_TESTS }
-            params.ENVIRONMENT == 'master'
-        }
-    }
-    steps {
-        script {
-            runPerformanceTests()
-        }
-    }
-    post {
-        always {
-            publishHTML([
-                allowMissing: true,
-                alwaysLinkToLastBuild: true,
-                keepAll: true,
-                reportDir: 'tests/performance/results',
-                reportFiles: '*.html',
-                reportName: 'Performance Test Report'
-            ])
-        }
-    }
-}
-```
 
 ### Flujo Completo Pipeline MASTER
 
@@ -501,72 +367,21 @@ stage('Performance Tests') {
 8. **Performance Tests**: Pruebas de carga con Locust
 9. **Generate Release Notes**: Documentación automática
 
-### Configuración Producción
-
-```yaml
-# Namespace: ecommerce-prod
-# Replicas: 3 por servicio (alta disponibilidad)
-# Resources:
-#   requests: memory=512Mi, cpu=500m
-#   limits: memory=1Gi, cpu=1000m
-# Environment: production
-# Monitoring: Habilitado
-# Logging: Nivel INFO
-```
-
 ### Resultados Pipeline MASTER
 
-| Etapa | Duración | Estado | Detalle |
-|-------|----------|--------|---------|
-| Checkout & Validation | 20s | ✅ | Estructura validada |
-| Unit Tests | 2m 15s | ✅ | 47/47 pruebas ✅ |
-| Integration Tests | 4m 32s | ✅ | 23/23 pruebas ✅ |
-| Build & Package | 3m 20s | ✅ | 6 servicios ✅ |
-| Docker Build & Push | 3m 10s | ✅ | 6 imágenes ✅ |
-| Deploy Production | 2m 30s | ✅ | 18 pods ready |
-| E2E Tests | 5m 30s | ✅ | 5/5 escenarios ✅ |
-| Performance Tests | 8m 45s | ✅ | 0% errores, <200ms |
-| Release Notes | 15s | ✅ | Generadas automáticamente |
+| Etapa | Duración | Estado | Descripción |
+|-------|----------|--------|-------------|
+| Checkout | 0.77s | ✅ | Descarga código fuente |
+| Environment Setup | 2.5s | ✅ | Setup de entorno |
+| Infrastructure Validation | 0.53s | ✅ | Validación de infraestructura |
+| Compilation & Build | 2m 1s | ✅ | Build de servicios |
+| Quality Assurance | 2m 44s | ✅ | Ejecución de tests |
+| Container Building | 1m 19s | ✅ | Creación de imágenes |
+| Deployment Orchestration | 1.1s | ✅ | Despliegue en Kubernetes |
+| Release Documentation | 0.82s | ✅ | Generación de artefactos |
+| Post Actions | 2.2s | ✅ | Acciones de posteo |
 
-**Total Pipeline MASTER: ~30 minutos**
-
-### Release Notes Automáticas
-
-```markdown
-# Release Notes - Build 127
-
-## 📋 Build Information
-- Build Number: 127
-- Build Tag: 127
-- Date: 2025-06-15 14:30:22
-- Environment: master
-- Git Commit: abc123def456
-
-## 🚀 Deployed Services
-- api-gateway:127
-- proxy-client:127
-- user-service:127
-- product-service:127
-- order-service:127
-- payment-service:127
-
-## ✅ Test Results
-- Unit Tests: EXECUTED (47/47 ✅)
-- Integration Tests: EXECUTED (23/23 ✅)
-- E2E Tests: EXECUTED (5/5 ✅)
-- Performance Tests: EXECUTED (STANDARD) - 0% errors, 156ms avg
-
-## 📊 Performance Metrics
-- Response Time: 156ms average, 287ms (95th percentile) ✅
-- Throughput: 23.7 requests/second ✅
-- Error Rate: 0.0% ✅
-- Test Level: STANDARD
-
-## 🌐 Access Information
-- Environment: master
-- Namespace: ecommerce-prod
-- Services Status: All services deployed and ready
-```
+**Total Pipeline MASTER: ~6 minutos**
 
 ---
 
@@ -644,77 +459,7 @@ stage('Performance Tests') {
 ## 🔧 Configuración Técnica Detallada
 
 ### Jenkinsfile Completo
-
-```groovy
-pipeline {
-    agent any
-
-    environment {
-        DOCKER_REGISTRY = 'localhost:5000'
-        K8S_NAMESPACE_DEV = 'ecommerce-dev'
-        K8S_NAMESPACE_STAGE = 'ecommerce-stage'
-        K8S_NAMESPACE_PROD = 'ecommerce-prod'
-        JAVA_HOME = '/opt/java/openjdk'
-        MAVEN_OPTS = '-Xmx1024m'
-    }
-
-    parameters {
-        choice(
-            name: 'ENVIRONMENT',
-            choices: ['dev', 'stage', 'master'],
-            description: 'Environment to deploy to'
-        )
-        string(
-            name: 'BUILD_TAG',
-            defaultValue: "${env.BUILD_ID}",
-            description: 'Docker image tag'
-        )
-        booleanParam(
-            name: 'SKIP_TESTS',
-            defaultValue: false,
-            description: 'Skip all tests (emergency deployment only)'
-        )
-        choice(
-            name: 'PERFORMANCE_TEST_LEVEL',
-            choices: ['light', 'standard', 'stress'],
-            description: 'Performance test intensity'
-        )
-    }
-
-    stages {
-        stage('Checkout & Validation') {
-            steps {
-                script {
-                    checkout scm
-                    sh 'ls -la'
-                    // Validar estructura del proyecto
-                    def services = ['api-gateway', 'proxy-client', 'user-service', 
-                                   'product-service', 'order-service', 'payment-service']
-                    services.each { service ->
-                        if (!fileExists("${service}/pom.xml")) {
-                            error "❌ ${service}/pom.xml not found"
-                        }
-                    }
-                }
-            }
-        }
-
-        // ... (resto del pipeline como se mostró anteriormente)
-    }
-
-    post {
-        always {
-            archiveArtifacts artifacts: '**/target/surefire-reports/**', allowEmptyArchive: true
-        }
-        success {
-            script {
-                def namespace = getNamespaceForEnvironment(params.ENVIRONMENT)
-                sh "kubectl get pods -n ${namespace}"
-            }
-        }
-    }
-}
-```
+Se encuentra en la raíz del repositorio como Jenkinsfile.
 
 ### Manifiestos Kubernetes
 
@@ -769,66 +514,7 @@ spec:
 ```
 
 ### Configuración de Locust
-
-```python
-# tests/performance/locustfile.py
-from locust import HttpUser, task, between
-import random
-import json
-
-class EcommerceUser(HttpUser):
-    wait_time = between(1, 3)
-    weight = 8  # 80% usuarios normales
-    
-    def on_start(self):
-        self.user_id = None
-        self.create_or_login_user()
-    
-    @task(3)
-    def browse_products(self):
-        with self.client.get("/app/api/products", 
-                           catch_response=True,
-                           name="Browse Products") as response:
-            if response.status_code == 200:
-                response.success()
-                products = response.json()
-                if products:
-                    product_id = random.choice(products).get("id", 1)
-                    self.view_product_details(product_id)
-    
-    @task(1)
-    def create_order(self):
-        if not self.user_id:
-            return
-        
-        order_data = {
-            "userId": self.user_id,
-            "orderItems": [{
-                "productId": random.randint(1, 10),
-                "quantity": random.randint(1, 3),
-                "unitPrice": random.uniform(10.0, 100.0)
-            }]
-        }
-        
-        with self.client.post("/app/api/orders",
-                            json=order_data,
-                            catch_response=True,
-                            name="Create Order") as response:
-            if response.status_code in [200, 201]:
-                response.success()
-                order = response.json()
-                if order and order.get("id"):
-                    self.process_payment(order["id"], order.get("totalAmount", 50.0))
-
-class AdminUser(HttpUser):
-    wait_time = between(3, 8)
-    weight = 1  # 10% usuarios admin
-    
-    @task
-    def admin_operations(self):
-        self.client.get("/app/api/admin/orders")
-        self.client.get("/app/api/admin/statistics")
-```
+Se encuentran en la raíz del repositorio dentro de la carpeta k8s.
 
 ---
 
@@ -837,16 +523,14 @@ class AdminUser(HttpUser):
 ### Screenshots del Pipeline
 
 #### Pipeline DEV Exitoso
-![Pipeline DEV](docs/screenshots/pipeline-dev-success.png)
+![Pipeline DEV]([docs/screenshots/pipeline-dev-success.png](https://github.com/dylanbc1/ecommerce-microservice-backend-app/blob/master/images/PIPELINE.png))
 *Pipeline DEV ejecutándose exitosamente en 6 minutos*
 
-#### Pipeline STAGE con Pruebas
-![Pipeline STAGE](docs/screenshots/pipeline-stage-tests.png)
-*Pipeline STAGE incluyendo pruebas unitarias e integración (14 minutos)*
+#### Artifacts
+![Artifacts]([docs/screenshots/pipeline-stage-tests.png](https://github.com/dylanbc1/ecommerce-microservice-backend-app/blob/master/images/ARTIFACTS.png))
 
-#### Pipeline MASTER Completo
-![Pipeline MASTER](docs/screenshots/pipeline-master-complete.png)
-*Pipeline MASTER con todas las pruebas y performance testing (30 minutos)*
+#### Configuración de ramas
+![Config. Ramas](https://github.com/dylanbc1/ecommerce-microservice-backend-app/blob/master/images/configpipeyramas.png)
 
 ### Estado de Kubernetes
 
@@ -881,34 +565,6 @@ product-service   ClusterIP      10.96.1.102      <none>        8500/TCP       2
 proxy-client      ClusterIP      10.96.1.105      <none>        8900/TCP       20m
 user-service      ClusterIP      10.96.1.101      <none>        8700/TCP       20m
 ```
-
-### Resultados de Pruebas
-
-#### Reporte JUnit - Pruebas Unitarias
-![JUnit Results](docs/screenshots/junit-unit-tests.png)
-*47 pruebas unitarias ejecutadas exitosamente con 84% de cobertura*
-
-#### Reporte de Integración
-![Integration Tests](docs/screenshots/integration-test-results.png)
-*23 pruebas de integración validando comunicación entre servicios*
-
-#### Reporte E2E
-![E2E Tests](docs/screenshots/e2e-test-results.png)
-*5 escenarios end-to-end validando flujos completos de usuario*
-
-### Reportes de Rendimiento Locust
-
-#### Dashboard Principal
-![Locust Dashboard](docs/screenshots/locust-dashboard.png)
-*Dashboard principal mostrando 50 usuarios concurrentes durante 5 minutos*
-
-#### Gráfico de Respuesta
-![Response Times](docs/screenshots/locust-response-times.png)
-*Tiempos de respuesta mantenidos bajo 300ms durante toda la prueba*
-
-#### Distribución de Requests
-![Request Distribution](docs/screenshots/locust-request-distribution.png)
-*Distribución de requests por endpoint con 0% de errores*
 
 ---
 
