@@ -6,10 +6,17 @@ pipeline {
         DOCKER_REGISTRY = 'localhost:5000'
         K8S_NAMESPACE = 'ecommerce-dev'
         K8S_CONTEXT = 'docker-desktop'
+
+        // JAVA VERSION FIX - CRITICAL!
+        JAVA_HOME = '/opt/java/openjdk-17'  // ← CAMBIO AQUÍ
+        PATH = "${JAVA_HOME}/bin:${PATH}"
+    
+        // MAVEN CONFIGURATION
+        MAVEN_OPTS = '-Xmx1024m -Djava.version=17'  // ← Y AQUÍ
         
         // Configuración Maven y Java
-        MAVEN_OPTS = '-Xmx1024m'
-        JAVA_HOME = '/opt/java/openjdk'
+        //MAVEN_OPTS = '-Xmx1024m'
+        //JAVA_HOME = '/opt/java/openjdk'
         
         // Servicios del taller (6 microservicios que se comunican)
         CORE_SERVICES = 'api-gateway,user-service,product-service,order-service,payment-service,proxy-client'
