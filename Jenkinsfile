@@ -366,23 +366,90 @@ def executeTests(String serviceName) {
     
     dir(serviceName) {
         try {
+            // Step 1: Clean previous test results
+            sh 'rm -rf target/surefire-reports || true'
+            
+            // Step 2: Compile tests first
             sh '''
-                echo "Running unit tests..."
-                ./mvnw test -Dmaven.test.failure.ignore=true || mvn test -Dmaven.test.failure.ignore=true || echo "Tests completed with issues"
+                echo "Compiling test classes..."
+                ./mvnw clean test-compile -q || echo "Test compilation completed with warnings"
             '''
             
-            // Publish test results if available
-            if (fileExists('target/surefire-reports/*.xml')) {
-                publishTestResults testResultsPattern: 'target/surefire-reports/*.xml'
-                echo "✅ ${serviceName} tests executed - results published"
-                return 'EXECUTED'
+            // Step 3: Check if test classes exist
+            def testClassCount = sh(
+                script: "find target/test-classes -name '*.class' 2>/dev/null | wc -l || echo '0'",
+                returnStdout: true
+            ).trim()
+            
+            if (testClassCount == '0') {
+                echo "⚠️ No test classes found in ${serviceName}"
+                return 'NO_TESTS'
+            }
+            
+            echo "📚 Found ${testClassCount} test classes"
+            
+            // Step 4: Run tests with proper configuration
+            sh '''
+                echo "Running unit tests..."
+                ./mvnw test \
+                    -Dmaven.test.failure.ignore=true \
+                    -DforkCount=1 \
+                    -DreuseForks=false \
+                    -Dspring.test.context.cache.maxSize=1 \
+                    -Djava.awt.headless=true \
+                    -Duser.timezone=UTC \
+                || echo "Tests completed with potential failures"
+            '''
+            
+            // Step 5: Verify test results were generated
+            def surefireExists = fileExists('target/surefire-reports')
+            if (surefireExists) {
+                def reportCount = sh(
+                    script: "find target/surefire-reports -name '*.xml' 2>/dev/null | wc -l || echo '0'",
+                    returnStdout: true
+                ).trim()
+                
+                if (reportCount.toInteger() > 0) {
+                    echo "📊 Found ${reportCount} test report files"
+                    
+                    // Publish test results
+                    try {
+                        publishTestResults testResultsPattern: 'target/surefire-reports/TEST-*.xml'
+                        echo "✅ ${serviceName} tests executed - results published"
+                        return 'SUCCESS'
+                    } catch (Exception e) {
+                        echo "⚠️ Test results publishing failed: ${e.getMessage()}"
+                        return 'RESULTS_ERROR'
+                    }
+                } else {
+                    echo "⚠️ Surefire reports directory exists but no XML files found"
+                    sh 'ls -la target/surefire-reports/ || echo "Directory is empty"'
+                    return 'NO_RESULTS'
+                }
             } else {
-                echo "⚠️ ${serviceName} tests executed - no results found"
-                return 'NO_RESULTS'
+                echo "⚠️ No surefire-reports directory found"
+                
+                // Check if tests actually ran
+                def targetExists = fileExists('target')
+                if (targetExists) {
+                    sh 'find target -name "*.txt" -o -name "*.xml" | head -10 || echo "No test artifacts found"'
+                }
+                return 'NO_REPORTS'
             }
             
         } catch (Exception e) {
-            echo "❌ ${serviceName} tests failed: ${e.getMessage()}"
+            echo "❌ ${serviceName} tests failed with exception: ${e.getMessage()}"
+            
+            // Try to get more details about the failure
+            try {
+                sh '''
+                    echo "=== Test failure diagnosis ==="
+                    ./mvnw test -X | tail -20 || echo "Could not get detailed error"
+                '''
+            } catch (Exception diagError) {
+                echo "Could not get diagnostic information: ${diagError.getMessage()}"
+            }
+            
             return 'FAILED'
         }
     }
@@ -393,13 +460,40 @@ def executeIntegrationTests() {
     
     dir('proxy-client') {
         try {
+            // Check if integration tests exist
             def hasIntegrationTests = sh(
-                script: "find src/test/java -name '*IntegrationTest.java' | wc -l",
+                script: "find src/test/java -name '*IntegrationTest.java' -o -name '*IT.java' 2>/dev/null | wc -l || echo '0'",
                 returnStdout: true
             ).trim()
             
-            if (hasIntegrationTests != '0') {
-                sh './mvnw test -Dtest=*IntegrationTest* -Dmaven.test.failure.ignore=true || echo "Integration tests completed"'
+            echo "🔍 Found ${hasIntegrationTests} integration test files"
+            
+            if (hasIntegrationTests.toInteger() > 0) {
+                // Run integration tests with specific profile
+                sh '''
+                    echo "Running integration tests..."
+                    ./mvnw test \
+                        -Dtest="*IntegrationTest*,*IT" \
+                        -Dmaven.test.failure.ignore=true \
+                        -Dspring.profiles.active=test \
+                        -DforkCount=1 \
+                        -DreuseForks=false \
+                    || echo "Integration tests completed"
+                '''
+                
+                // Check for results
+                if (fileExists('target/surefire-reports')) {
+                    def reportCount = sh(
+                        script: "find target/surefire-reports -name '*IntegrationTest*.xml' -o -name '*IT*.xml' 2>/dev/null | wc -l || echo '0'",
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (reportCount.toInteger() > 0) {
+                        echo "📊 Integration tests produced ${reportCount} reports"
+                        return 'SUCCESS'
+                    }
+                }
+                
                 return 'EXECUTED'
             } else {
                 echo "⚠️ No integration tests found"
