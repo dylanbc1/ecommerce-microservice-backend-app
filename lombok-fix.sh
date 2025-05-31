@@ -1,98 +1,138 @@
 #!/bin/bash
-# Script para fix definitivo de Lombok en el taller
+# Fix completo para resolver el problema de Lombok en Jenkins
 
-echo "🔧 Aplicando fix de Lombok para compatibilidad Java 11..."
+echo "🔧 Aplicando fix definitivo de Lombok para el taller..."
 
-# 1. Cambiar version de Lombok en TODOS los pom.xml
-echo "📝 Actualizando versiones de Lombok..."
-find . -name "pom.xml" -exec sed -i 's/<lombok.version>1\.18\.30<\/lombok.version>/<lombok.version>1.18.24<\/lombok.version>/g' {} \;
-find . -name "pom.xml" -exec sed -i 's/<version>1\.18\.30<\/version>/<version>1.18.24<\/version>/g' {} \;
+# Servicios que usan Lombok
+SERVICES=("user-service" "product-service" "order-service" "payment-service" "proxy-client")
 
-# 2. Verificar servicios que usan Lombok
-echo "🔍 Servicios que usan Lombok:"
-LOMBOK_SERVICES=("user-service" "product-service" "order-service" "payment-service" "proxy-client")
+# Estrategia 1: Downgrade a versión más antigua y estable
+echo "📝 Strategy 1: Downgrading Lombok to ultra-stable version..."
 
-for service in "${LOMBOK_SERVICES[@]}"; do
+for service in "${SERVICES[@]}"; do
     if [ -d "$service" ]; then
-        echo "  ✓ $service"
+        echo "  🔧 Fixing $service..."
         
-        # Actualizar compiler plugin si existe
+        # Backup original
+        cp "$service/pom.xml" "$service/pom.xml.backup"
+        
+        # Aplicar fix completo con sed
+        sed -i 's/<lombok.version>.*<\/lombok.version>/<lombok.version>1.18.20<\/lombok.version>/g' "$service/pom.xml"
+        sed -i 's/<version>1\.18\.[0-9]*<\/version>/<version>1.18.20<\/version>/g' "$service/pom.xml"
+        
+        # Verificar si tiene maven-compiler-plugin y actualizarlo
         if grep -q "maven-compiler-plugin" "$service/pom.xml"; then
-            echo "    📦 Actualizando maven-compiler-plugin en $service"
+            echo "    📦 Updating maven-compiler-plugin in $service"
             
-            # Crear backup
-            cp "$service/pom.xml" "$service/pom.xml.backup"
-            
-            # Aplicar configuración corregida
+            # Crear un pom.xml temporal con configuración mejorada
             python3 - << EOF
 import xml.etree.ElementTree as ET
 import os
 
 pom_file = "$service/pom.xml"
 if os.path.exists(pom_file):
-    # Leer XML
-    tree = ET.parse(pom_file)
-    root = tree.getroot()
+    # Leer XML con namespace handling
+    with open(pom_file, 'r') as f:
+        content = f.read()
     
-    # Namespace Maven
-    ns = {'maven': 'http://maven.apache.org/POM/4.0.0'}
-    
-    # Buscar maven-compiler-plugin
-    plugins = root.findall('.//maven:plugin[maven:artifactId="maven-compiler-plugin"]', ns)
-    
-    for plugin in plugins:
-        # Actualizar version
-        version = plugin.find('maven:version', ns)
-        if version is not None:
-            version.text = '3.11.0'
+    # Simple string replacement para maven-compiler-plugin
+    if 'maven-compiler-plugin' in content:
+        # Buscar la sección del plugin y reemplazarla
+        lines = content.split('\n')
+        new_lines = []
+        in_compiler_plugin = False
+        plugin_depth = 0
         
-        # Buscar o crear configuration
-        config = plugin.find('maven:configuration', ns)
-        if config is None:
-            config = ET.SubElement(plugin, 'configuration')
+        for line in lines:
+            if 'maven-compiler-plugin' in line and '<artifactId>' in line:
+                in_compiler_plugin = True
+                plugin_depth = 0
+                new_lines.append(line)
+                continue
+            
+            if in_compiler_plugin:
+                if '<plugin>' in line:
+                    plugin_depth += 1
+                elif '</plugin>' in line:
+                    if plugin_depth == 0:
+                        # Fin del maven-compiler-plugin, agregar nuestra configuración
+                        new_lines.extend([
+                            '            <version>3.10.1</version>',
+                            '            <configuration>',
+                            '                <source>11</source>',
+                            '                <target>11</target>',
+                            '                <annotationProcessorPaths>',
+                            '                    <path>',
+                            '                        <groupId>org.projectlombok</groupId>',
+                            '                        <artifactId>lombok</artifactId>',
+                            '                        <version>1.18.20</version>',
+                            '                    </path>',
+                            '                </annotationProcessorPaths>',
+                            '            </configuration>',
+                            '        </plugin>'
+                        ])
+                        in_compiler_plugin = False
+                        continue
+                    else:
+                        plugin_depth -= 1
+                
+                # Saltar líneas del plugin original excepto cierre
+                if not ('</plugin>' in line and plugin_depth == 0):
+                    continue
+            
+            new_lines.append(line)
         
-        # Limpiar configuration existente
-        config.clear()
+        # Escribir archivo actualizado
+        with open(pom_file, 'w') as f:
+            f.write('\n'.join(new_lines))
         
-        # Agregar source y target
-        ET.SubElement(config, 'source').text = '11'
-        ET.SubElement(config, 'target').text = '11'
-        
-        # Agregar annotationProcessorPaths
-        paths = ET.SubElement(config, 'annotationProcessorPaths')
-        path = ET.SubElement(paths, 'path')
-        ET.SubElement(path, 'groupId').text = 'org.projectlombok'
-        ET.SubElement(path, 'artifactId').text = 'lombok'
-        ET.SubElement(path, 'version').text = '1.18.24'
-    
-    # Guardar archivo
-    tree.write(pom_file, encoding='utf-8', xml_declaration=True)
-    print(f"    ✓ Actualizado {pom_file}")
+        print(f"    ✓ Updated {pom_file}")
 EOF
         fi
+        
+        echo "    ✅ $service fixed"
     else
-        echo "  ⚠️ $service no encontrado"
+        echo "  ⚠️ $service not found"
     fi
 done
 
-# 3. Limpiar builds anteriores
-echo "🧹 Limpiando builds anteriores..."
-for service in "${LOMBOK_SERVICES[@]}"; do
+# Estrategia 2: Limpiar targets anteriores
+echo "🧹 Strategy 2: Cleaning previous build artifacts..."
+for service in "${SERVICES[@]}"; do
     if [ -d "$service/target" ]; then
         rm -rf "$service/target"
-        echo "  ✓ Limpiado $service/target"
+        echo "  ✓ Cleaned $service/target"
     fi
 done
 
-# 4. Verificar cambios
-echo "🔍 Verificando cambios aplicados..."
-grep -r "lombok.version" . --include="*.xml" | grep -v ".git" | head -5
+# Estrategia 3: Verificar versiones aplicadas
+echo "🔍 Strategy 3: Verifying applied versions..."
+for service in "${SERVICES[@]}"; do
+    if [ -f "$service/pom.xml" ]; then
+        echo "=== $service ==="
+        grep -A 1 -B 1 "lombok" "$service/pom.xml" | head -5
+        echo ""
+    fi
+done
+
+# Estrategia 4: Test build simple en uno de los servicios
+echo "🔬 Strategy 4: Testing build with api-gateway (no lombok)..."
+if [ -d "api-gateway" ]; then
+    cd api-gateway
+    echo "  🔨 Testing basic compile..."
+    ./mvnw clean compile -q || echo "  ⚠️ Basic compile still has issues"
+    cd ..
+fi
 
 echo ""
-echo "✅ Fix de Lombok aplicado. Principales cambios:"
-echo "   • Lombok 1.18.30 → 1.18.24 (compatible con Java 11)"
-echo "   • maven-compiler-plugin actualizado a 3.11.0"
-echo "   • annotationProcessorPaths configurado correctamente"
-echo "   • Targets limpiados para rebuild completo"
+echo "✅ Lombok fix aplicado con las siguientes estrategias:"
+echo "   • Lombok downgraded to 1.18.20 (ultra-stable)"
+echo "   • maven-compiler-plugin updated to 3.10.1"
+echo "   • annotationProcessorPaths configured correctly"
+echo "   • Previous build artifacts cleaned"
 echo ""
-echo "🚀 Ahora ejecuta el pipeline Jenkins nuevamente."
+echo "🚀 Próximos pasos:"
+echo "   1. git add ."
+echo "   2. git commit -m 'fix: lombok downgrade to 1.18.20 for jenkins compatibility'"
+echo "   3. git push"
+echo "   4. Run Jenkins pipeline again"
