@@ -65,7 +65,7 @@ pipeline {
 
         stage('Unit Tests') {
             when { 
-                not { params.SKIP_TESTS }
+                expression { !params.SKIP_TESTS }
             }
             parallel {
                 stage('User Service Tests') {
@@ -114,10 +114,10 @@ pipeline {
         stage('Integration Tests') {
             when { 
                 allOf {
-                    not { params.SKIP_TESTS }
+                    expression { !params.SKIP_TESTS }
                     anyOf {
-                        params.ENVIRONMENT == 'stage'
-                        params.ENVIRONMENT == 'master'
+                        expression { params.ENVIRONMENT == 'stage' }
+                        expression { params.ENVIRONMENT == 'master' }
                     }
                 }
             }
@@ -198,8 +198,8 @@ pipeline {
         stage('E2E Tests') {
             when { 
                 allOf {
-                    not { params.SKIP_TESTS }
-                    params.ENVIRONMENT == 'master'
+                    expression { !params.SKIP_TESTS }
+                    expression { params.ENVIRONMENT == 'master' }
                 }
             }
             steps {
@@ -222,9 +222,9 @@ pipeline {
         stage('Performance Tests') {
             when { 
                 allOf {
-                    not { params.SKIP_TESTS }
-                    not { params.SKIP_PERFORMANCE_TESTS }
-                    params.ENVIRONMENT == 'master'
+                    expression { !params.SKIP_TESTS }
+                    expression { !params.SKIP_PERFORMANCE_TESTS }
+                    expression { params.ENVIRONMENT == 'master' }
                 }
             }
             steps {
@@ -250,7 +250,9 @@ pipeline {
         }
 
         stage('Generate Release Notes') {
-            when { params.ENVIRONMENT == 'master' }
+            when { 
+                expression { params.ENVIRONMENT == 'master' }
+            }
             steps {
                 script {
                     generateReleaseNotes(params.BUILD_TAG)
