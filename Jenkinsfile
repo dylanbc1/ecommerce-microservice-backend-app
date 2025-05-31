@@ -36,13 +36,14 @@ pipeline {
                     sh 'ls -la'
                     
                     // Verificar servicios principales
+                    // 6 microservicios del taller que se comunican entre sí
                     def services = [
-                        'api-gateway',
-                        'proxy-client', 
-                        'user-service',
-                        'product-service',
-                        'order-service',
-                        'payment-service'
+                        'api-gateway',     // Punto de entrada
+                        'user-service',    // Gestión usuarios
+                        'product-service', // Catálogo productos  
+                        'order-service',   // Procesamiento órdenes
+                        'payment-service', // Pagos
+                        'proxy-client'     // Cliente comunicación
                     ]
                     
                     services.each { service ->
@@ -63,13 +64,14 @@ pipeline {
                 script {
                     echo "=== BUILD SERVICES ==="
                     
+                    // 6 microservicios del taller
                     def services = [
                         'api-gateway',
-                        'proxy-client',
                         'user-service',
                         'product-service',
                         'order-service',
-                        'payment-service'
+                        'payment-service',
+                        'proxy-client'
                     ]
                     
                     services.each { service ->
@@ -93,6 +95,7 @@ pipeline {
                 script {
                     echo "=== RUNNING TESTS ==="
                     
+                    // Solo servicios principales para testing
                     def services = ['user-service', 'product-service', 'order-service', 'payment-service']
                     
                     services.each { service ->
@@ -111,13 +114,14 @@ pipeline {
                 script {
                     echo "=== DOCKER BUILD ==="
                     
+                    // 6 microservicios del taller
                     def services = [
                         'api-gateway',
-                        'proxy-client',
                         'user-service',
                         'product-service',
                         'order-service',
-                        'payment-service'
+                        'payment-service',
+                        'proxy-client'
                     ]
                     
                     services.each { service ->
