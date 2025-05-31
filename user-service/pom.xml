@@ -66,11 +66,13 @@
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
             <scope>runtime</scope>
+			<version>2.1.214</version>
         </dependency>
         <dependency>
             <groupId>mysql</groupId>
             <artifactId>mysql-connector-java</artifactId>
             <scope>runtime</scope>
+			<version>8.0.33</version>
         </dependency>
         
         <!-- Lombok -->
