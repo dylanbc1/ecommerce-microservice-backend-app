@@ -438,7 +438,7 @@ def fixLombokCompatibility(serviceName) {
                 # Si no hay versión explícita o es muy antigua, advertir
                 if [ -z "$CURRENT_LOMBOK" ]; then
                     echo "⚠️ No explicit Lombok version found - using parent BOM version"
-                elif echo "$CURRENT_LOMBOK" | grep -E "(1\.18\.(0|1|2)[0-9]|1\.1[0-7]\.)"; then
+                elif echo "$CURRENT_LOMBOK" | grep -E "(1\\.18\\.(0|1|2)[0-9]|1\\.[0-1][0-7]\\.)"; then
                     echo "⚠️ Potentially incompatible Lombok version: $CURRENT_LOMBOK"
                     echo "🔧 Consider updating to 1.18.30+ for Java 21 compatibility"
                 else
