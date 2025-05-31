@@ -6,13 +6,9 @@ pipeline {
         DOCKER_REGISTRY = 'localhost:5000'
         K8S_NAMESPACE = 'ecommerce-dev'
         K8S_CONTEXT = 'docker-desktop'
-
-        // JAVA VERSION FIX - CRITICAL!
-        JAVA_HOME = '/opt/java/openjdk-17'  // ← CAMBIO AQUÍ
-        PATH = "${JAVA_HOME}/bin:${PATH}"
     
-        // MAVEN CONFIGURATION
-        MAVEN_OPTS = '-Xmx1024m -Djava.version=17'  // ← Y AQUÍ
+        // Maven configuration - SIN JAVA_HOME ESPECÍFICO
+        MAVEN_OPTS = '-Xmx1024m -Dmaven.test.failure.ignore=true'
         
         // Configuración Maven y Java
         //MAVEN_OPTS = '-Xmx1024m'
@@ -52,6 +48,37 @@ pipeline {
                     echo "🚀 === ENVIRONMENT SETUP ==="
                     echo "Target Environment: ${params.TARGET_ENV}"
                     echo "Build Tag: ${params.IMAGE_TAG}"
+                    
+                    // DETECTAR JAVA AUTOMÁTICAMENTE
+                    echo "🔍 Detecting Java installation..."
+                    def javaVersion = sh(
+                        script: 'java -version 2>&1 | head -1 || echo "Java not found"',
+                        returnStdout: true
+                    ).trim()
+                    echo "Java detected: ${javaVersion}"
+                    
+                    def javaHome = sh(
+                        script: '''
+                            # Try to find JAVA_HOME automatically
+                            if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
+                                echo "$JAVA_HOME"
+                            elif command -v java >/dev/null 2>&1; then
+                                java_bin=$(which java)
+                                # Remove /bin/java to get JAVA_HOME
+                                echo "${java_bin%/bin/java}"
+                            else
+                                echo "NOT_FOUND"
+                            fi
+                        ''',
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (javaHome != "NOT_FOUND") {
+                        echo "✅ Java Home detected: ${javaHome}"
+                        env.DETECTED_JAVA_HOME = javaHome
+                    } else {
+                        echo "⚠️ Java not found in standard locations"
+                    }
                     
                     // Checkout and validate workspace
                     checkout scm
