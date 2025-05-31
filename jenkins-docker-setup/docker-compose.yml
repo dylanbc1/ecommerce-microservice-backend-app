@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins-pipeline
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      # Datos persistentes de Jenkins
+      - jenkins_home:/var/jenkins_home
+      # Socket de Docker para comunicación con el daemon del host
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mapear binario de docker del host (ajustar según tu OS)
+      - /usr/bin/docker:/usr/bin/docker:ro  # Linux
+      # Si estás en Windows con WSL, usa:
+      # - /usr/bin/docker.exe:/usr/bin/docker:ro
+      # Si estás en Mac:
+      # - /usr/local/bin/docker:/usr/bin/docker:ro
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      # Configurar Jenkins para permitir setup inicial
+      - JENKINS_OPTS=--httpPort=8080
+      - JAVA_OPTS=-Xmx1024m -Djava.awt.headless=true
+    # Usar usuario root para acceso completo a Docker
+    user: root
+    restart: unless-stopped
+    networks:
+      - jenkins-net
+
+  # Registry local para imágenes Docker
+  docker-registry:
+    image: registry:2
+    container_name: docker-registry
+    ports:
+      - "5000:5000"
+    volumes:
+      - registry_data:/var/lib/registry
+    environment:
+      - REGISTRY_STORAGE_DELETE_ENABLED=true
+    restart: unless-stopped
+    networks:
+      - jenkins-net
+
+volumes:
+  jenkins_home:
+    driver: local
+  registry_data:
+    driver: local
+
+networks:
+  jenkins-net:
+    driver: bridge
