@@ -1,16 +1,13 @@
-# k8s/user-service/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: user-service
-  labels:
-    app: user-service
+  namespace: ecommerce-dev
 spec:
-  type: ClusterIP
-  ports:
-  - port: 8700
-    targetPort: 8700
-    protocol: TCP
-    name: http
   selector:
     app: user-service
+  ports:
+    - protocol: TCP
+      port: 8700
+      targetPort: 8700
+  type: ClusterIP

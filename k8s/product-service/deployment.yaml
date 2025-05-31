@@ -1,13 +1,10 @@
-# k8s/product-service/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: product-service
-  labels:
-    app: product-service
-    version: v1
+  namespace: ecommerce-dev
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: product-service
@@ -17,33 +14,10 @@ spec:
         app: product-service
     spec:
       containers:
-      - name: product-service
-        image: {{IMAGE_NAME}}
-        ports:
-        - containerPort: 8500
-        env:
-        - name: SPRING_PROFILES_ACTIVE
-          value: "kubernetes"
-        - name: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
-          value: "http://service-discovery:8761/eureka/"
-        - name: SPRING_ZIPKIN_BASE_URL
-          value: "http://zipkin:9411/"
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        readinessProbe:
-          httpGet:
-            path: /actuator/health
-            port: 8500
-          initialDelaySeconds: 60
-          periodSeconds: 10
-        livenessProbe:
-          httpGet:
-            path: /actuator/health
-            port: 8500
-          initialDelaySeconds: 90
-          periodSeconds: 30
+        - name: product-service
+          image: selimhorri/product-service-ecommerce-boot:0.1.0
+          ports:
+            - containerPort: 8500
+          envFrom:
+            - configMapRef:
+                name: app-config

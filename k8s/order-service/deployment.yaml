@@ -1,13 +1,10 @@
-# k8s/order-service/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: order-service
-  labels:
-    app: order-service
-    version: v1
+  namespace: ecommerce-dev
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: order-service
@@ -17,27 +14,10 @@ spec:
         app: order-service
     spec:
       containers:
-      - name: order-service
-        image: {{IMAGE_NAME}}
-        ports:
-        - containerPort: 8300
-        env:
-        - name: SPRING_PROFILES_ACTIVE
-          value: "kubernetes"
-        - name: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
-          value: "http://service-discovery:8761/eureka/"
-        - name: SPRING_ZIPKIN_BASE_URL
-          value: "http://zipkin:9411/"
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        readinessProbe:
-          httpGet:
-            path: /actuator/health
-            port: 8300
-          initialDelaySeconds: 60
-          periodSeconds: 10
+        - name: order-service
+          image: selimhorri/order-service-ecommerce-boot:0.1.0
+          ports:
+            - containerPort: 8300
+          envFrom:
+            - configMapRef:
+                name: app-config

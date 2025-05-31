@@ -1,13 +1,10 @@
-# k8s/api-gateway/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api-gateway
-  labels:
-    app: api-gateway
-    version: v1
+  namespace: ecommerce-dev
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: api-gateway
@@ -17,27 +14,10 @@ spec:
         app: api-gateway
     spec:
       containers:
-      - name: api-gateway
-        image: {{IMAGE_NAME}}
-        ports:
-        - containerPort: 8080
-        env:
-        - name: SPRING_PROFILES_ACTIVE
-          value: "kubernetes"
-        - name: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
-          value: "http://service-discovery:8761/eureka/"
-        - name: SPRING_ZIPKIN_BASE_URL
-          value: "http://zipkin:9411/"
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "500m"
-          limits:
-            memory: "1Gi"
-            cpu: "1000m"
-        readinessProbe:
-          httpGet:
-            path: /actuator/health
-            port: 8080
-          initialDelaySeconds: 90
-          periodSeconds: 10
+        - name: api-gateway
+          image: selimhorri/api-gateway-ecommerce-boot:0.1.0
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: app-config

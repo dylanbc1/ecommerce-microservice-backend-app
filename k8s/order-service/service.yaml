@@ -1,16 +1,13 @@
-# k8s/order-service/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: order-service
-  labels:
-    app: order-service
+  namespace: ecommerce-dev
 spec:
-  type: ClusterIP
-  ports:
-  - port: 8300
-    targetPort: 8300
-    protocol: TCP
-    name: http
   selector:
     app: order-service
+  ports:
+    - protocol: TCP
+      port: 8300
+      targetPort: 8300
+  type: ClusterIP

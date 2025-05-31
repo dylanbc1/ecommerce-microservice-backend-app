@@ -1,16 +1,15 @@
-# k8s/api-gateway/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: api-gateway
-  labels:
-    app: api-gateway
+  namespace: ecommerce-dev
 spec:
-  type: LoadBalancer
-  ports:
-  - port: 80
-    targetPort: 8080
-    protocol: TCP
-    name: http
   selector:
     app: api-gateway
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: NodePort
+
+
