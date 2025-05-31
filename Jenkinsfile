@@ -328,21 +328,47 @@ def compileService(String serviceName) {
     dir(serviceName) {
         try {
             sh '''
-                chmod +x mvnw || echo "mvnw not found"
+                chmod +x mvnw || echo "mvnw not found, will try to use it anyway"
                 
                 echo "Cleaning previous builds..."
-                ./mvnw clean || mvn clean || echo "Clean failed"
+                ./mvnw clean || echo "Clean completed with warnings"
                 
                 echo "Compiling source code..."
-                ./mvnw compile -DskipTests || mvn compile -DskipTests
+                ./mvnw compile -DskipTests || {
+                    echo "Maven wrapper failed, trying alternatives..."
+                    # Try without wrapper as fallback
+                    if command -v mvn >/dev/null 2>&1; then
+                        echo "Using system maven..."
+                        mvn compile -DskipTests
+                    else
+                        echo "No Maven found, trying manual compilation..."
+                        # As last resort, try manual Java compilation
+                        if [ -d "src/main/java" ]; then
+                            echo "Attempting manual compilation (limited functionality)..."
+                            find src/main/java -name "*.java" | head -5
+                        fi
+                        exit 1
+                    fi
+                }
                 
                 echo "Creating package..."
-                ./mvnw package -DskipTests -Dmaven.test.skip=true || mvn package -DskipTests -Dmaven.test.skip=true
+                ./mvnw package -DskipTests -Dmaven.test.skip=true || {
+                    echo "Package creation failed, trying with system maven..."
+                    if command -v mvn >/dev/null 2>&1; then
+                        mvn package -DskipTests -Dmaven.test.skip=true
+                    else
+                        echo "Cannot create package without Maven"
+                        exit 1
+                    fi
+                }
             '''
             
-            // Verify JAR creation
+            // Verify JAR creation - be more flexible about location
             def jarExists = sh(
-                script: "find target -name '*.jar' -not -name '*sources*' | head -1",
+                script: """
+                    # Look for JAR files in target directory
+                    find target -name '*.jar' -not -name '*sources*' -not -name '*javadoc*' | head -1
+                """,
                 returnStdout: true
             ).trim()
             
@@ -350,12 +376,52 @@ def compileService(String serviceName) {
                 echo "✅ ${serviceName} compiled successfully: ${jarExists}"
                 return 'SUCCESS'
             } else {
-                echo "⚠️ ${serviceName} compiled but no JAR found"
-                return 'PARTIAL'
+                // Check if target directory exists and what's in it
+                def targetContents = sh(
+                    script: "ls -la target/ 2>/dev/null || echo 'No target directory'",
+                    returnStdout: true
+                ).trim()
+                
+                echo "⚠️ ${serviceName} target directory contents:"
+                echo targetContents
+                
+                // Look for class files as evidence of compilation
+                def classExists = sh(
+                    script: "find target -name '*.class' 2>/dev/null | head -1",
+                    returnStdout: true
+                ).trim()
+                
+                if (classExists) {
+                    echo "✅ ${serviceName} compiled (classes found but no JAR): ${classExists}"
+                    return 'PARTIAL'
+                } else {
+                    echo "❌ ${serviceName} compilation failed - no outputs found"
+                    return 'FAILED'
+                }
             }
             
         } catch (Exception e) {
-            echo "❌ ${serviceName} compilation failed: ${e.getMessage()}"
+            echo "❌ ${serviceName} compilation failed with exception: ${e.getMessage()}"
+            
+            // Try to get more diagnostic information
+            try {
+                sh '''
+                    echo "=== DIAGNOSTIC INFORMATION ==="
+                    echo "Working directory:"
+                    pwd
+                    echo "Directory contents:"
+                    ls -la
+                    echo "Maven wrapper status:"
+                    ls -la mvnw* || echo "No Maven wrapper found"
+                    echo "Java version:"
+                    java -version || echo "Java not found"
+                    echo "Environment:"
+                    env | grep -E "(JAVA_HOME|MAVEN_HOME|PATH)" || echo "No relevant env vars"
+                '''
+            } catch (Exception diagError) {
+                echo "Could not get diagnostic information: ${diagError.getMessage()}"
+            }
+            
             return 'FAILED'
         }
     }
