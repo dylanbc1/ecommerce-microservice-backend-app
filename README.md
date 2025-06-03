@@ -523,14 +523,29 @@ Se encuentran en la raíz del repositorio dentro de la carpeta k8s.
 ### Screenshots del Pipeline
 
 #### Pipeline DEV Exitoso
-![Pipeline DEV]([docs/screenshots/pipeline-dev-success.png](https://github.com/dylanbc1/ecommerce-microservice-backend-app/blob/master/images/PIPELINE.png))
+![Pipeline DEV](https://github.com/dylanbc1/ecommerce-microservice-backend-app/blob/master/images/PIPELINE.png)
 *Pipeline DEV ejecutándose exitosamente en 6 minutos*
 
 #### Artifacts
-![Artifacts]([docs/screenshots/pipeline-stage-tests.png](https://github.com/dylanbc1/ecommerce-microservice-backend-app/blob/master/images/ARTIFACTS.png))
+![Artifacts](https://github.com/dylanbc1/ecommerce-microservice-backend-app/blob/master/images/ARTIFACTS.png)
 
 #### Configuración de ramas
 ![Config. Ramas](https://github.com/dylanbc1/ecommerce-microservice-backend-app/blob/master/images/configpipeyramas.png)
+
+### Locust 1
+![Locust1](https://github.com/dylanbc1/ecommerce-microservice-backend-app/blob/master/images/locust-princ.jpg)
+
+### Locust 2
+![Locust2](https://github.com/dylanbc1/ecommerce-microservice-backend-app/blob/master/images/locust2.jpg)
+
+### Locust 3
+![Locust3](https://github.com/dylanbc1/ecommerce-microservice-backend-app/blob/master/images/locust3.jpg)
+
+### Locust 4
+![Locust4](https://github.com/dylanbc1/ecommerce-microservice-backend-app/blob/master/images/locust4.jpg)
+
+### Locust 5
+![Locust5](https://github.com/dylanbc1/ecommerce-microservice-backend-app/blob/master/images/locust5.jpg)
 
 ### Estado de Kubernetes
 
