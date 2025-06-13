@@ -1,0 +1,13 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# Variable files
+terraform.tfvars
+*.auto.tfvars
+
+# GCP Credentials - Never commit these
+gcp-credentials.json
