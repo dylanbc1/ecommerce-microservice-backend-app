@@ -1,0 +1,58 @@
+# Circuit Breaker Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      payment-service:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 5s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+      
+      user-service:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 60
+      
+      product-service:
+        registerHealthIndicator: true
+        slidingWindowSize: 15
+        minimumNumberOfCalls: 8
+        waitDurationInOpenState: 8s
+        failureRateThreshold: 55
+
+  retry:
+    instances:
+      payment-service:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+      
+      user-service:
+        maxAttempts: 2
+        waitDuration: 500ms
+        
+  bulkhead:
+    instances:
+      payment-service:
+        maxConcurrentCalls: 10
+        maxWaitDuration: 2s
+      
+      order-service:
+        maxConcurrentCalls: 15
+        maxWaitDuration: 1s
+
+  timelimiter:
+    instances:
+      payment-service:
+        timeoutDuration: 3s
+        cancelRunningFuture: true
+      
+      user-service:
+        timeoutDuration: 2s

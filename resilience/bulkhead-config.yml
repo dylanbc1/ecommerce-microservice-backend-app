@@ -1,0 +1,64 @@
+# Bulkhead Pattern Configuration
+bulkhead:
+  thread-pools:
+    # Pool separado para operaciones críticas de pago
+    payment-critical:
+      core-pool-size: 5
+      max-pool-size: 10
+      queue-capacity: 100
+      thread-name-prefix: "payment-critical-"
+      keep-alive-seconds: 60
+    
+    # Pool para operaciones de usuario
+    user-operations:
+      core-pool-size: 3
+      max-pool-size: 8
+      queue-capacity: 50
+      thread-name-prefix: "user-ops-"
+      keep-alive-seconds: 30
+    
+    # Pool para búsqueda de productos
+    product-search:
+      core-pool-size: 4
+      max-pool-size: 12
+      queue-capacity: 200
+      thread-name-prefix: "product-search-"
+      keep-alive-seconds: 45
+    
+    # Pool para notificaciones (no críticas)
+    notifications:
+      core-pool-size: 2
+      max-pool-size: 5
+      queue-capacity: 500
+      thread-name-prefix: "notifications-"
+      keep-alive-seconds: 120
+
+  # Separación de recursos por tipo de operación
+  resource-isolation:
+    database:
+      # Pool de conexiones separado por servicio
+      payment-db-pool:
+        max-connections: 20
+        min-connections: 5
+        connection-timeout: 3000
+        idle-timeout: 600000
+      
+      user-db-pool:
+        max-connections: 15
+        min-connections: 3
+        connection-timeout: 2000
+        idle-timeout: 300000
+      
+      product-db-pool:
+        max-connections: 25
+        min-connections: 5
+        connection-timeout: 2500
+        idle-timeout: 400000
+    
+    # Límites de CPU y memoria por operación
+    cpu-limits:
+      payment-processing: 70%
+      user-authentication: 20%
+      product-search: 50%
+      order-processing: 60%
+      notifications: 10%

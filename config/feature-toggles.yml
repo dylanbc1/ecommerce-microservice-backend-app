@@ -1,0 +1,80 @@
+# Feature Toggles Configuration
+features:
+  # Payment Features
+  payment:
+    new-payment-gateway:
+      enabled: false
+      environments: ["dev", "stage"]
+      description: "Nueva pasarela de pagos con mejor seguridad"
+      rollout-percentage: 25
+    
+    payment-retry-mechanism:
+      enabled: true
+      environments: ["dev", "stage", "prod"]
+      description: "Reintentos automáticos para pagos fallidos"
+      rollout-percentage: 100
+
+  # User Management Features  
+  user:
+    enhanced-profile:
+      enabled: true
+      environments: ["dev", "stage"]
+      description: "Perfiles de usuario mejorados con más campos"
+      rollout-percentage: 50
+    
+    social-login:
+      enabled: false
+      environments: ["dev"]
+      description: "Login con redes sociales"
+      rollout-percentage: 0
+
+  # Product Features
+  product:
+    ai-recommendations:
+      enabled: true
+      environments: ["dev", "stage"]
+      description: "Recomendaciones de productos con IA"
+      rollout-percentage: 30
+    
+    advanced-search:
+      enabled: true
+      environments: ["dev", "stage", "prod"]
+      description: "Búsqueda avanzada con filtros"
+      rollout-percentage: 100
+
+  # Order Features
+  order:
+    real-time-tracking:
+      enabled: true
+      environments: ["prod"]
+      description: "Seguimiento en tiempo real de órdenes"
+      rollout-percentage: 80
+    
+    express-checkout:
+      enabled: false
+      environments: ["dev"]
+      description: "Checkout express en un paso"
+      rollout-percentage: 10
+
+# Environment-specific overrides
+environment-overrides:
+  dev:
+    features:
+      payment:
+        new-payment-gateway:
+          enabled: true
+          rollout-percentage: 100
+  
+  stage:
+    features:
+      user:
+        enhanced-profile:
+          enabled: true
+          rollout-percentage: 100
+  
+  prod:
+    features:
+      order:
+        real-time-tracking:
+          enabled: true
+          rollout-percentage: 100
