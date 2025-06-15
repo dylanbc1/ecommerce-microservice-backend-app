@@ -25,16 +25,6 @@ output "ssh_connection_command" {
   value       = [for ip in module.compute.instance_ips : "ssh debian@${ip}"]
 }
 
-# Database Outputs
-output "database_public_ip" {
-  description = "Database public IP"
-  value       = module.database.db_public_ip
-}
-
-output "database_connection_name" {
-  description = "Database connection name"
-  value       = module.database.instance_connection_name
-}
 
 # Kubernetes Outputs (if enabled)
 output "gke_cluster_name" {

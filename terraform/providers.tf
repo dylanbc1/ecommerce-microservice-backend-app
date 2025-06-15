@@ -1,2 +1,14 @@
-# Provider configuration moved to main.tf to avoid duplication
-# This file can be used for additional provider configurations if needed
+# Provider configuration for Google Cloud
+provider "google" {
+  credentials = var.gcp_credentials_file != null ? file(var.gcp_credentials_file) : null
+  project     = var.gcp_project_id
+  region      = var.gcp_region
+  zone        = var.gcp_zone
+}
+
+provider "google-beta" {
+  credentials = var.gcp_credentials_file != null ? file(var.gcp_credentials_file) : null
+  project     = var.gcp_project_id
+  region      = var.gcp_region
+  zone        = var.gcp_zone
+}
