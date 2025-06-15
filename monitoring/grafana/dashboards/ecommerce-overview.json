@@ -1,0 +1,168 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Ecommerce Microservices Overview",
+    "tags": ["ecommerce", "microservices"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Services Health Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=\"ecommerce-microservices\"}",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m])) by (job)",
+            "legendFormat": "{{job}}"
+          }
+        ],
+        "yAxes": [
+          {"label": "Requests/sec"},
+          {"show": false}
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Response Time (95th percentile)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job))",
+            "legendFormat": "{{job}}"
+          }
+        ],
+        "yAxes": [
+          {"label": "Seconds"},
+          {"show": false}
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (job) / sum(rate(http_requests_total[5m])) by (job)",
+            "legendFormat": "{{job}}"
+          }
+        ],
+        "yAxes": [
+          {"label": "Error Rate", "min": 0, "max": 1},
+          {"show": false}
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "jvm_memory_used_bytes{job=\"ecommerce-microservices\"} / jvm_memory_max_bytes{job=\"ecommerce-microservices\"}",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "yAxes": [
+          {"label": "Memory Usage %", "min": 0, "max": 1},
+          {"show": false}
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 6,
+        "title": "JVM Threads",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "jvm_threads_current{job=\"ecommerce-microservices\"}",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "yAxes": [
+          {"label": "Thread Count"},
+          {"show": false}
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 7,
+        "title": "Business Metrics - Orders",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(orders_created_total)",
+            "legendFormat": "Total Orders"
+          },
+          {
+            "expr": "rate(orders_created_total[1h])",
+            "legendFormat": "Orders/Hour"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 24}
+      },
+      {
+        "id": 8,
+        "title": "Business Metrics - Payments",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(payments_successful_total)",
+            "legendFormat": "Successful Payments"
+          },
+          {
+            "expr": "sum(payments_failed_total)",
+            "legendFormat": "Failed Payments"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 24}
+      },
+      {
+        "id": 9,
+        "title": "Database Connections",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "hikaricp_connections_active{job=\"ecommerce-microservices\"}",
+            "legendFormat": "Active - {{instance}}"
+          },
+          {
+            "expr": "hikaricp_connections_idle{job=\"ecommerce-microservices\"}",
+            "legendFormat": "Idle - {{instance}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+}
