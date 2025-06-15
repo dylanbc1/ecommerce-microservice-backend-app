@@ -34,7 +34,7 @@ pipeline {
     parameters {
         choice(
             name: 'TARGET_ENV',
-            choices: ['dev', 'stage', 'prod'],  // Cambiado de 'master' a 'prod'
+            choices: ['dev', 'stage', 'prod'],
             description: 'Environment for deployment'
         )
         string(
@@ -518,9 +518,11 @@ pipeline {
                             else
                                 echo "Generating basic release notes..."
                                 mkdir -p change-management/releases
-                                generateBasicReleaseNotes()
                             fi
                         """
+                        
+                        // Generar release notes básicas
+                        generateBasicReleaseNotes()
                         
                         // Crear tag de release si es necesario
                         if (params.TARGET_ENV == 'prod') {
@@ -1042,8 +1044,8 @@ ${env.CORE_SERVICES.split(',').collect { "- ${it}" }.join('\n')}
 
 ## Rollback Instructions
 In case of issues:
-1. Execute: \`kubectl rollout undo deployment/<service> -n ${env.K8S_NAMESPACE}\`
-2. Verify: \`kubectl get pods -n ${env.K8S_NAMESPACE}\`
+1. Execute: kubectl rollout undo deployment/SERVICE_NAME -n ${env.K8S_NAMESPACE}
+2. Verify: kubectl get pods -n ${env.K8S_NAMESPACE}
 3. Contact: ${env.EMAIL_RECIPIENTS}
 
 ## Status
@@ -1191,9 +1193,9 @@ def generateBasicReleaseNotes() {
 
 ## 📋 Changes Included
 ### Recent Commits
-\`\`\`
+```
 ${recentCommits}
-\`\`\`
+```
 
 ## 🧪 Testing Summary
 - **Unit Tests**: ${params.SKIP_TESTS ? 'SKIPPED' : 'EXECUTED'}
@@ -1207,8 +1209,8 @@ ${recentCommits}
 
 ## 🔄 Rollback Plan
 In case of issues:
-1. Execute: \`kubectl rollout undo deployment/<service> -n ${env.K8S_NAMESPACE}\`
-2. Verify health: \`kubectl get pods -n ${env.K8S_NAMESPACE}\`
+1. Execute: kubectl rollout undo deployment/SERVICE_NAME -n ${env.K8S_NAMESPACE}
+2. Verify health: kubectl get pods -n ${env.K8S_NAMESPACE}
 3. Contact: devops@company.com
 
 ## 📝 Services Updated
