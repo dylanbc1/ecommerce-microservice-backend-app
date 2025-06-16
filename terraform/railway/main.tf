@@ -1,4 +1,3 @@
-# terraform/railway/main.tf
 terraform {
   required_version = ">= 1.0"
   
@@ -287,41 +286,18 @@ resource "null_resource" "railway_services" {
   
   provisioner "local-exec" {
     command = <<-EOT
-      echo "Preparing service: ${each.key}"
-      echo "Image: ${each.value.image}"
-      echo "Port: ${each.value.port}"
+      echo "Deploying service: ${each.key}"
       
-      # Crear directorio para documentación
-      mkdir -p railway-services/${each.key}
+      export RAILWAY_TOKEN="${var.railway_token}"
       
-      # Crear archivo de configuración para referencia
-      cat > railway-services/${each.key}/service-config.json << EOF
-{
-  "name": "${each.key}",
-  "image": "${each.value.image}",
-  "port": ${each.value.port},
-  "priority": ${each.value.priority},
-  "environment": ${jsonencode(each.value.env)}
-}
-EOF
+      # Crear directorio temporal para el servicio
+      mkdir -p temp-${each.key}
+      cd temp-${each.key}
       
-      echo "Service ${each.key} configuration prepared"
-    EOT
-    
-    working_dir = path.module
-  }
-  
-  depends_on = [null_resource.railway_project]
-  
-  triggers = {
-    service_config = jsonencode(each.value)
-  }
-}
-
-# Configurar puerto
+      # Crear Dockerfile
+      cat > Dockerfile << 'EOF'
+FROM ${each.value.image}
 EXPOSE ${each.value.port}
-
-# Variables de entorno se configuran en Railway UI o CLI
 EOF
       
       # Crear railway.json
@@ -335,23 +311,31 @@ EOF
 EOF
       
       # Crear servicio en Railway
-      railway service create ${each.key} || true
+      npx railway service create ${each.key} || echo "Service ${each.key} might already exist"
       
       # Configurar variables de entorno
-      ${join("\n", [for k, v in each.value.env : "railway variables set ${k}=\"${v}\" --service ${each.key} || true"])}
+      %{ for k, v in each.value.env }
+      npx railway variables set ${k}="${v}" --service ${each.key} || echo "Failed to set ${k}"
+      %{ endfor }
       
       # Variables comunes para servicios Spring Boot
       if [[ "${each.value.image}" == *"ecommerce-boot"* ]]; then
-        railway variables set SPRING_ZIPKIN_BASE_URL="https://zipkin-${var.environment}.up.railway.app" --service ${each.key} || true
-        railway variables set EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE="https://service-discovery-${var.environment}.up.railway.app/eureka/" --service ${each.key} || true
-        railway variables set SPRING_CONFIG_IMPORT="optional:configserver:https://cloud-config-${var.environment}.up.railway.app" --service ${each.key} || true
+        npx railway variables set SPRING_ZIPKIN_BASE_URL="https://zipkin-${var.environment}.up.railway.app" --service ${each.key} || true
+        npx railway variables set EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE="https://service-discovery-${var.environment}.up.railway.app/eureka/" --service ${each.key} || true
+        npx railway variables set SPRING_CONFIG_IMPORT="optional:configserver:https://cloud-config-${var.environment}.up.railway.app" --service ${each.key} || true
       fi
       
       # Desplegar servicio
-      railway up --detach --service ${each.key}
+      npx railway up --detach --service ${each.key} || echo "Deploy failed for ${each.key}"
+      
+      # Limpiar directorio temporal
+      cd ..
+      rm -rf temp-${each.key}
       
       # Esperar entre deploys según prioridad
-      sleep $((${each.value.priority} * 10))
+      sleep $((${each.value.priority} * 5))
+      
+      echo "Service ${each.key} deployment completed"
     EOT
     
     environment = {
@@ -371,9 +355,13 @@ EOF
 resource "null_resource" "railway_database" {
   provisioner "local-exec" {
     command = <<-EOT
-      cd ${path.module}
-      railway add postgresql
-      railway variables set DATABASE_URL="$PGHOST:$PGPORT/$PGDATABASE?user=$PGUSER&password=$PGPASSWORD"
+      echo "Setting up Railway database..."
+      export RAILWAY_TOKEN="${var.railway_token}"
+      
+      # Agregar PostgreSQL al proyecto
+      npx railway add postgresql || echo "PostgreSQL might already exist"
+      
+      echo "Database setup completed"
     EOT
     
     environment = {
@@ -384,7 +372,6 @@ resource "null_resource" "railway_database" {
   depends_on = [null_resource.railway_project]
 }
 
-# Script de configuración post-deploy
 # Script de configuración post-deploy
 resource "local_file" "post_deploy_script" {
   content = <<-EOT
