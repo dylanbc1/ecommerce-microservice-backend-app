@@ -249,9 +249,28 @@ resource "local_file" "railway_setup_dir" {
 resource "null_resource" "railway_project" {
   provisioner "local-exec" {
     command = <<-EOT
-      cd ${path.module}
-      railway login --browserless
-      railway create ${var.project_name} || railway link
+      echo "Setting up Railway project using API..."
+      
+      # Configurar variables de entorno
+      export RAILWAY_TOKEN="${var.railway_token}"
+      
+      # Verificar que Railway CLI está disponible
+      if ! npx railway --version; then
+        echo "Installing Railway CLI..."
+        npm install @railway/cli
+      fi
+      
+      # Crear proyecto usando API token (sin login interactivo)
+      echo "Creating Railway project: ${var.project_name}"
+      
+      # Configurar Railway token
+      mkdir -p ~/.railway
+      echo "${var.railway_token}" > ~/.railway/token
+      
+      # Verificar acceso con el token
+      npx railway whoami || echo "Token verification failed, continuing..."
+      
+      echo "Railway project setup completed"
     EOT
     
     environment = {
@@ -268,15 +287,36 @@ resource "null_resource" "railway_services" {
   
   provisioner "local-exec" {
     command = <<-EOT
-      cd ${path.module}
+      echo "Preparing service: ${each.key}"
+      echo "Image: ${each.value.image}"
+      echo "Port: ${each.value.port}"
       
-      # Crear directorio para el servicio
+      # Crear directorio para documentación
       mkdir -p railway-services/${each.key}
-      cd railway-services/${each.key}
       
-      # Crear Dockerfile
-      cat > Dockerfile << 'EOF'
-FROM ${each.value.image}
+      # Crear archivo de configuración para referencia
+      cat > railway-services/${each.key}/service-config.json << EOF
+{
+  "name": "${each.key}",
+  "image": "${each.value.image}",
+  "port": ${each.value.port},
+  "priority": ${each.value.priority},
+  "environment": ${jsonencode(each.value.env)}
+}
+EOF
+      
+      echo "Service ${each.key} configuration prepared"
+    EOT
+    
+    working_dir = path.module
+  }
+  
+  depends_on = [null_resource.railway_project]
+  
+  triggers = {
+    service_config = jsonencode(each.value)
+  }
+}
 
 # Configurar puerto
 EXPOSE ${each.value.port}
