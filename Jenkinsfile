@@ -131,7 +131,7 @@ pipeline {
                         sh '''
                             if ! command -v railway &> /dev/null; then
                                 echo "Installing Railway CLI..."
-                                npm install -g @railway/cli
+                                sudo npm install -g @railway/cli
                             fi
                             
                             # Verify Railway authentication
