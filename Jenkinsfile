@@ -254,7 +254,7 @@ pipeline {
                                     sh "kubectl config use-context ${env.K8S_CONTEXT} || echo 'Context not available'"
                                     sh "kubectl cluster-info || echo 'Cluster not accessible'"
                                     
-                                    // Create namespace if needed
+                                    // Create namespace if need
                                     sh """
                                         kubectl get namespace ${env.K8S_NAMESPACE} || \
                                         kubectl create namespace ${env.K8S_NAMESPACE} || echo 'Namespace creation failed'
