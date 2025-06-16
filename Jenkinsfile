@@ -130,52 +130,64 @@ pipeline {
                         // Install Railway CLI
                         withCredentials([string(credentialsId: 'railway-token', variable: 'RAILWAY_TOKEN')]) {
                             sh '''
-                                echo "Installing Railway CLI locally..."
+                                echo "Installing Railway CLI..."
                                 npm install @railway/cli
-
-                                echo "Setting up Railway authentication..."
                                 
-                                # Debug: Check if token is available (masked)
+                                echo "=== RAILWAY TOKEN DEBUG ==="
                                 echo "Token length: ${#RAILWAY_TOKEN}"
+                                echo "Token prefix (first 8 chars): $(echo "$RAILWAY_TOKEN" | cut -c1-8)"
                                 
-                                # Try different authentication methods
-                                echo "Method 1: Using RAILWAY_TOKEN environment variable"
-                                export RAILWAY_TOKEN=$RAILWAY_TOKEN
+                                # Test with correct API endpoint and token variable
+                                echo "Testing token with Railway API v2..."
+                                API_RESPONSE=$(curl -s -w "\\n%{http_code}" \
+                                    -H "Authorization: Bearer $RAILWAY_TOKEN" \
+                                    -H "Content-Type: application/json" \
+                                    -d '{"query":"query { me { name email } }"}' \
+                                    https://backboard.railway.com/graphql/v2)
                                 
-                                if npx railway whoami 2>/dev/null; then
-                                    echo "✅ Railway authentication successful with RAILWAY_TOKEN"
-                                else
-                                    echo "Method 1 failed, trying Method 2..."
+                                HTTP_CODE=$(echo "$API_RESPONSE" | tail -n1)
+                                API_BODY=$(echo "$API_RESPONSE" | head -n -1)
+                                
+                                echo "HTTP Status Code: $HTTP_CODE"
+                                echo "API Response: $API_BODY"
+                                
+                                if [ "$HTTP_CODE" = "200" ] && echo "$API_BODY" | grep -q '"me"'; then
+                                    echo "✅ Account token is valid!"
                                     
-                                    # Method 2: Try writing token to config file
-                                    echo "Method 2: Writing token to Railway config"
-                                    mkdir -p ~/.railway
-                                    echo "$RAILWAY_TOKEN" > ~/.railway/token
+                                    # For Account tokens, use RAILWAY_API_TOKEN environment variable
+                                    export RAILWAY_API_TOKEN=$RAILWAY_TOKEN
                                     
-                                    if npx railway whoami 2>/dev/null; then
-                                        echo "✅ Railway authentication successful with config file"
+                                    echo "Testing Railway CLI with account token..."
+                                    if npx railway whoami; then
+                                        echo "✅ Railway CLI authentication successful with RAILWAY_API_TOKEN"
                                     else
-                                        echo "Method 2 failed, trying Method 3..."
+                                        echo "CLI test failed, trying global installation..."
+                                        npm install -g @railway/cli
                                         
-                                        # Method 3: Try using railway login with --token flag if available
-                                        echo "Method 3: Checking Railway CLI version and available options"
-                                        npx railway --help | grep -i token || echo "No token flag available"
-                                        
-                                        # Method 4: Direct API call to verify token
-                                        echo "Method 4: Testing token with direct API call"
-                                        if curl -s -H "Authorization: Bearer $RAILWAY_TOKEN" https://backboard.railway.app/graphql \
-                                            -H "Content-Type: application/json" \
-                                            -d '{"query":"query { me { email } }"}' | grep -q "email"; then
-                                            echo "✅ Token is valid via API"
-                                            echo "Setting up Railway CLI with valid token..."
-                                            export RAILWAY_TOKEN=$RAILWAY_TOKEN
-                                            npx railway whoami || echo "CLI still having issues but token is valid"
+                                        if railway whoami; then
+                                            echo "✅ Railway CLI working with global installation"
                                         else
-                                            echo "❌ Token appears to be invalid or expired"
-                                            echo "Please check your Railway token in Jenkins credentials"
-                                            exit 1
+                                            echo "⚠️  CLI issues but token is valid via API"
+                                            # Create config file as fallback
+                                            mkdir -p ~/.railway
+                                            echo "$RAILWAY_TOKEN" > ~/.railway/token
+                                            chmod 600 ~/.railway/token
+                                            echo "Token saved to config file"
                                         fi
                                     fi
+                                else
+                                    echo "❌ AUTHENTICATION FAILED"
+                                    echo "HTTP Code: $HTTP_CODE"
+                                    echo "Response: $API_BODY"
+                                    
+                                    echo ""
+                                    echo "🔧 TROUBLESHOOTING:"
+                                    echo "1. Verify you created an Account Token (not Project Token)"
+                                    echo "2. Go to https://railway.app/account/tokens"
+                                    echo "3. Create a new Account Token (don't select a team)"
+                                    echo "4. Update 'railway-token' credential in Jenkins"
+                                    
+                                    exit 1
                                 fi
                             '''
                         }
