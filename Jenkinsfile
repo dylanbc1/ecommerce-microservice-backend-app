@@ -153,14 +153,33 @@ pipeline {
                         // Setup Terraform for Railway
                         echo "🏗️ Setting up Terraform for Railway..."
                         sh '''
-                            # Install Terraform if not present
-                            if ! command -v terraform &> /dev/null; then
-                                echo "Installing Terraform..."
-                                wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-                                echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-                                sudo apt update && sudo apt install terraform
+                            # Check if Terraform is available
+                            if command -v terraform &> /dev/null; then
+                                echo "✅ Terraform found:"
+                                terraform version
+                            else
+                                echo "Installing Terraform locally..."
+                                
+                                # Download latest Terraform
+                                TF_VERSION="1.7.5"
+                                cd /tmp
+                                wget "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+                                unzip "terraform_${TF_VERSION}_linux_amd64.zip"
+                                
+                                # Install to user bin
+                                mkdir -p ~/bin
+                                mv terraform ~/bin/terraform
+                                chmod +x ~/bin/terraform
+                                
+                                # Add to PATH
+                                export PATH="$HOME/bin:$PATH"
+                                
+                                echo "✅ Terraform installed:"
+                                ~/bin/terraform version
+                                
+                                # Make PATH persistent for subsequent steps
+                                echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
                             fi
-                            terraform version
                         '''
                     }
                     
