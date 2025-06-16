@@ -1,3 +1,5 @@
+# terraform/railway/main.tf - Para proyecto existente
+
 terraform {
   required_version = ">= 1.0"
   
@@ -10,21 +12,17 @@ terraform {
       source  = "hashicorp/local"
       version = "~> 2.0"
     }
-    external = {
-      source  = "hashicorp/external"
-      version = "~> 2.0"
-    }
   }
 }
 
 variable "railway_token" {
-  description = "Railway API Token"
+  description = "Railway Project Token (not team token)"
   type        = string
   sensitive   = true
 }
 
 variable "project_name" {
-  description = "Railway Project Name"
+  description = "Railway Project Name (must exist already)"
   type        = string
   default     = "ecommerce-microservices"
 }
@@ -35,185 +33,112 @@ variable "environment" {
   default     = "dev"
 }
 
-# Configuración de servicios core que funcionan
+# Configuración simplificada - servicios uno por uno
 locals {
-  # Templates que funcionan bien
-  railway_templates = {
+  # Solo servicios esenciales para empezar
+  services = {
     zipkin = {
-      template = "zipkin"
-      priority = 1
+      image = "openzipkin/zipkin"
+      port  = 9411
+      env = {
+        STORAGE_TYPE = "mem"
+      }
     }
-    postgres = {
-      template = "postgresql"
-      priority = 2  
-    }
-  }
-  
-  # Servicios custom usando el approach que funciona para Zipkin
-  custom_services = {
+    
     api-gateway = {
       image = "selimhorri/api-gateway-ecommerce-boot:0.1.0"
       port  = 8080
-      priority = 3
       env = {
         SPRING_PROFILES_ACTIVE = var.environment
         SERVER_PORT = "8080"
       }
     }
-    
-    service-discovery = {
-      image = "selimhorri/service-discovery-ecommerce-boot:0.1.0" 
-      port  = 8761
-      priority = 4
-      env = {
-        SPRING_PROFILES_ACTIVE = var.environment
-        SERVER_PORT = "8761"
-        EUREKA_CLIENT_REGISTER_WITH_EUREKA = "false"
-        EUREKA_CLIENT_FETCH_REGISTRY = "false"
-      }
-    }
-    
-    user-service = {
-      image = "selimhorri/user-service-ecommerce-boot:0.1.0"
-      port  = 8700
-      priority = 5
-      env = {
-        SPRING_PROFILES_ACTIVE = var.environment
-        SERVER_PORT = "8700"
-      }
-    }
-    
-    product-service = {
-      image = "selimhorri/product-service-ecommerce-boot:0.1.0"
-      port  = 8500
-      priority = 6
-      env = {
-        SPRING_PROFILES_ACTIVE = var.environment
-        SERVER_PORT = "8500"
-      }
-    }
   }
 }
 
-# Setup Railway CLI (reutilizar lo que funciona)
-resource "local_file" "railway_setup_dir" {
-  content  = ""
-  filename = "${path.module}/railway-setup/.gitkeep"
-}
-
-resource "null_resource" "railway_project" {
+# Verificar que el proyecto existe y podemos acceder
+resource "null_resource" "verify_railway_access" {
   provisioner "local-exec" {
     command = <<-EOT
-      echo "🚂 Setting up Railway project..."
-      
+      echo "🔍 Verifying Railway access..."
       export RAILWAY_TOKEN="${var.railway_token}"
       
-      # Instalar Railway CLI si es necesario
+      # Verificar CLI
       if ! command -v railway &> /dev/null; then
-        echo "Installing Railway CLI..."
         npm install -g @railway/cli || npm install @railway/cli
       fi
       
-      # Verificar CLI
-      railway --version || npx railway --version
-      
       # Verificar autenticación
-      railway whoami || npx railway whoami || echo "Auth check completed"
+      echo "Testing authentication..."
+      if ! railway whoami; then
+        echo "❌ Authentication failed"
+        exit 1
+      fi
       
-      echo "✅ Railway project setup completed"
+      # Verificar acceso al proyecto
+      echo "Testing project access..."
+      if ! railway project list | grep -q "${var.project_name}"; then
+        echo "❌ Project '${var.project_name}' not found or not accessible"
+        echo "Available projects:"
+        railway project list || echo "Could not list projects"
+        exit 1
+      fi
+      
+      echo "✅ Railway access verified"
     EOT
     
     environment = {
       RAILWAY_TOKEN = var.railway_token
     }
   }
-  
-  depends_on = [local_file.railway_setup_dir]
 }
 
-# Desplegar templates (como Zipkin que ya funciona)
-resource "null_resource" "railway_templates" {
-  for_each = local.railway_templates
+# Desplegar servicios uno por uno
+resource "null_resource" "deploy_service" {
+  for_each = local.services
   
   provisioner "local-exec" {
     command = <<-EOT
-      echo "🚀 Deploying template: ${each.key}"
+      echo "🚀 Deploying service: ${each.key}"
       export RAILWAY_TOKEN="${var.railway_token}"
       
-      # Link al proyecto existente
-      railway link ${var.project_name} || echo "Link completed"
-      
-      # Desplegar template si no existe
-      echo "Deploying ${each.value.template} template..."
-      railway deploy --template ${each.value.template} || echo "Template ${each.key} deployment completed"
-      
-      echo "✅ Template ${each.key} deployed"
-      sleep 10
-    EOT
-    
-    environment = {
-      RAILWAY_TOKEN = var.railway_token
-    }
-  }
-  
-  depends_on = [null_resource.railway_project]
-}
-
-# Desplegar servicios custom usando Docker images
-resource "null_resource" "railway_custom_services" {
-  for_each = local.custom_services
-  
-  provisioner "local-exec" {
-    command = <<-EOT
-      echo "🐳 Deploying custom service: ${each.key}"
-      export RAILWAY_TOKEN="${var.railway_token}"
-      
-      # Crear directorio temporal para este servicio
+      # Crear directorio temporal
       mkdir -p /tmp/railway-${each.key}
       cd /tmp/railway-${each.key}
       
-      # Crear Dockerfile simple
+      # Crear archivos necesarios
       cat > Dockerfile << 'EOF'
 FROM ${each.value.image}
 EXPOSE ${each.value.port}
 EOF
       
-      # Crear archivo de configuración Railway
-      cat > railway.toml << 'EOF'
-[build]
-builder = "dockerfile"
-
-[deploy]
-restartPolicyType = "always"
-EOF
+      # Link al proyecto existente
+      railway link ${var.project_name}
       
-      # Link al proyecto
-      echo "Linking to Railway project..."
-      railway link ${var.project_name} || echo "Link completed"
+      # Verificar que estamos linkeados correctamente
+      railway status
       
-      # Crear servicio si no existe
-      echo "Creating service ${each.key}..."
-      railway service create ${each.key} || echo "Service ${each.key} might already exist"
+      # Crear servicio
+      railway service create ${each.key} || echo "Service might already exist"
       
-      # Configurar variables de entorno
-      echo "Setting environment variables..."
+      # Configurar variables
       %{ for k, v in each.value.env ~}
-      railway variables set ${k}="${v}" --service ${each.key} || echo "Variable ${k} configured"
+      railway variables set ${k}="${v}" --service ${each.key}
       %{ endfor ~}
+      railway variables set PORT="${each.value.port}" --service ${each.key}
       
-      # Configurar PORT para Railway
-      railway variables set PORT="${each.value.port}" --service ${each.key} || echo "PORT configured"
+      # Deploy
+      railway up --service ${each.key} --detach
       
-      # Desplegar el servicio
-      echo "Deploying service ${each.key}..."
-      railway up --service ${each.key} --detach || echo "Deployment for ${each.key} initiated"
+      # Verificar deployment
+      sleep 10
+      railway logs --service ${each.key} || echo "Could not fetch logs"
       
-      # Limpiar directorio temporal
+      # Limpiar
       cd /
       rm -rf /tmp/railway-${each.key}
       
       echo "✅ Service ${each.key} deployment completed"
-      sleep 15
     EOT
     
     environment = {
@@ -221,94 +146,27 @@ EOF
     }
   }
   
-  depends_on = [null_resource.railway_templates]
+  depends_on = [null_resource.verify_railway_access]
 }
 
-# Verificación post-deployment
-resource "local_file" "verify_deployment" {
-  content = <<-EOT
-#!/bin/bash
-echo "🔍 Verifying Railway deployment..."
-
-export RAILWAY_TOKEN="${var.railway_token}"
-
-echo "Project: ${var.project_name}"
-echo "Environment: ${var.environment}"
-
-echo "Checking Railway project status..."
-railway status || npx railway status || echo "Status check completed"
-
-echo "Listing services..."
-railway service list || npx railway service list || echo "Service list completed"
-
-echo "Checking service domains..."
-railway domain list || npx railway domain list || echo "Domain list completed"
-
-echo "✅ Verification completed"
-echo "🌐 Check Railway Dashboard: https://railway.app/dashboard"
-EOT
-  
-  filename        = "${path.module}/verify-railway.sh"
-  file_permission = "0755"
-}
-
-# Obtener información real de los servicios
-data "external" "railway_services_info" {
-  depends_on = [null_resource.railway_custom_services]
-  
-  program = ["bash", "-c", <<-EOT
-    export RAILWAY_TOKEN="${var.railway_token}"
-    
-    echo "{"
-    echo '"status": "deployed",'
-    echo '"project_name": "${var.project_name}",'
-    echo '"environment": "${var.environment}",'
-    echo '"services_count": "${length(local.railway_templates) + length(local.custom_services)}",'
-    echo '"dashboard_url": "https://railway.app/dashboard"'
-    echo "}"
-  EOT
-  ]
-}
-
-# Outputs
-output "railway_project_name" {
-  description = "Railway project name"
-  value       = var.project_name
-}
-
-output "deployment_info" {
-  description = "Deployment information"
+# Output con información útil
+output "deployment_status" {
+  description = "Deployment status"
   value = {
-    project_name      = var.project_name
-    environment       = var.environment
-    services_deployed = length(local.railway_templates) + length(local.custom_services)
-    dashboard_url     = "https://railway.app/dashboard"
+    project_name = var.project_name
+    services = keys(local.services)
+    dashboard_url = "https://railway.app/dashboard"
+    verify_command = "railway status"
   }
 }
 
-output "service_info" {
-  description = "Service information"
-  value       = data.external.railway_services_info.result
-}
-
-output "service_urls" {
-  description = "Probable service URLs (verify in Railway dashboard)"
-  value = {
-    zipkin            = "Check Railway dashboard for actual URL"
-    api_gateway       = "Check Railway dashboard for actual URL"
-    service_discovery = "Check Railway dashboard for actual URL"
-    user_service      = "Check Railway dashboard for actual URL"
-    product_service   = "Check Railway dashboard for actual URL"
-  }
-}
-
-output "next_steps" {
-  description = "Next steps"
+output "troubleshooting" {
+  description = "Troubleshooting information"
   value = [
-    "1. Check Railway Dashboard: https://railway.app/dashboard",
-    "2. Generate domains for services in Railway UI",
-    "3. Verify all services are running",
-    "4. Check service logs for any issues",
-    "5. Configure custom domains if needed"
+    "1. Verify project exists: railway project list",
+    "2. Check service status: railway status", 
+    "3. View logs: railway logs --service [service-name]",
+    "4. Generate domains: In Railway UI, go to service settings",
+    "5. Check Railway Dashboard: https://railway.app/dashboard"
   ]
 }
