@@ -132,11 +132,8 @@ pipeline {
                             echo "Installing Railway CLI locally..."
                             npm install @railway/cli
 
-                            echo "Authenticating to Railway using token..."
-                            npx railway login --token ${RAILWAY_TOKEN}
-
-                            echo "Authenticated as:"
-                            npx railway whoami
+                            echo "Verifying Railway authentication..."
+                            RAILWAY_TOKEN=${RAILWAY_TOKEN} npx railway whoami
                         '''
                         
                         // Setup Terraform for Railway
