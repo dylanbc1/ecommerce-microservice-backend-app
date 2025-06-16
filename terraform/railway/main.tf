@@ -157,7 +157,7 @@ FROM ${each.value.image}
 EXPOSE ${each.value.port}
 EOF
       
-      # Crear railway.toml para configuración
+      # Crear railway.toml para config
       cat > railway.toml << EOF
 [build]
 builder = "dockerfile"
