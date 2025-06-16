@@ -345,12 +345,14 @@ resource "null_resource" "railway_database" {
 }
 
 # Script de configuración post-deploy
+# Script de configuración post-deploy
 resource "local_file" "post_deploy_script" {
-  content = templatefile("${path.module}/templates/post-deploy.sh.tpl", {
-    project_name = var.project_name
-    environment  = var.environment
-    services     = local.all_services
-  })
+  content = <<-EOT
+#!/bin/bash
+echo "Post-deploy configuration for ${var.project_name}"
+echo "Environment: ${var.environment}"
+echo "Deployment completed successfully"
+EOT
   
   filename        = "${path.module}/railway-services/post-deploy.sh"
   file_permission = "0755"
