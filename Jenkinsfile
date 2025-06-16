@@ -128,16 +128,23 @@ pipeline {
                         echo "🚂 Setting up Railway environment..."
                         
                         // Install Railway CLI
-                        sh '''
-                            echo "Installing Railway CLI locally..."
-                            npm install @railway/cli
+                        withCredentials([string(credentialsId: 'railway-token', variable: 'RAILWAY_TOKEN')]) {
+                            sh '''
+                                echo "Installing Railway CLI locally..."
+                                npm install @railway/cli
 
-                            echo "Logging into Railway..."
-                            npx railway login ${RAILWAY_TOKEN}
-
-                            echo "Authenticated as:"
-                            npx railway whoami
-                        '''
+                                echo "Setting up Railway authentication..."
+                                export RAILWAY_TOKEN=$RAILWAY_TOKEN
+                                
+                                echo "Verifying Railway authentication..."
+                                if npx railway whoami; then
+                                    echo "✅ Railway authentication successful"
+                                else
+                                    echo "❌ Railway authentication failed"
+                                    exit 1
+                                fi
+                            '''
+                        }
                         
                         // Setup Terraform for Railway
                         echo "🏗️ Setting up Terraform for Railway..."
