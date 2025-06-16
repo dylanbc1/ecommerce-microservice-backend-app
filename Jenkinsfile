@@ -129,14 +129,14 @@ pipeline {
                         
                         // Install Railway CLI
                         sh '''
-                            if ! command -v railway &> /dev/null; then
-                                echo "Installing Railway CLI..."
-                                sudo npm install -g @railway/cli
-                            fi
-                            
-                            # Verify Railway authentication
-                            railway login --browserless
-                            railway whoami
+                            echo "Installing Railway CLI locally..."
+                            npm install @railway/cli
+
+                            echo "Logging into Railway..."
+                            npx railway login --browserless
+
+                            echo "Authenticated as:"
+                            npx railway whoami
                         '''
                         
                         // Setup Terraform for Railway
