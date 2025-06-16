@@ -930,34 +930,36 @@ pipeline {
 
     post {
         always {
-            script {
-                echo "🏁 === PIPELINE COMPLETION ==="
-                
-                // Archive test results
-                archiveArtifacts artifacts: '**/target/surefire-reports/**', allowEmptyArchive: true
-                
-                // Archive security reports
-                archiveArtifacts artifacts: '**/*-vulnerabilities.json', allowEmptyArchive: true
-                
-                // Archive coverage reports
-                archiveArtifacts artifacts: '**/target/site/jacoco/**', allowEmptyArchive: true
-                
-                // Archive Terraform outputs
-                archiveArtifacts artifacts: 'terraform/railway/terraform-outputs.json', allowEmptyArchive: true
-                
-                // Clean temporary files
-                sh "rm -f temp-*-deployment.yaml || true"
-                sh "rm -f build-*.log || true"
-                sh "rm -f *-vulnerabilities.json || true"
-                
-                def buildStatus = currentBuild.currentResult
-                echo "Pipeline Status: ${buildStatus}"
-                echo "Environment: ${params.TARGET_ENV}"
-                echo "Image Tag: ${params.IMAGE_TAG}"
-                echo "Tests: ${params.SKIP_TESTS ? 'SKIPPED' : 'EXECUTED'}"
-                echo "Security Scan: ${params.SKIP_SECURITY_SCAN ? 'SKIPPED' : 'EXECUTED'}"
-                echo "Railway Deployment: ${params.DEPLOY_TO_RAILWAY ? 'EXECUTED' : 'SKIPPED'}"
-                echo "Local K8s Deployment: ${params.DEPLOY_TO_LOCAL_K8S ? 'EXECUTED' : 'SKIPPED'}"
+            node {
+                script {
+                    echo "🏁 === PIPELINE COMPLETION ==="
+                    
+                    // Archive test results
+                    archiveArtifacts artifacts: '**/target/surefire-reports/**', allowEmptyArchive: true
+                    
+                    // Archive security reports
+                    archiveArtifacts artifacts: '**/*-vulnerabilities.json', allowEmptyArchive: true
+                    
+                    // Archive coverage reports
+                    archiveArtifacts artifacts: '**/target/site/jacoco/**', allowEmptyArchive: true
+                    
+                    // Archive Terraform outputs
+                    archiveArtifacts artifacts: 'terraform/railway/terraform-outputs.json', allowEmptyArchive: true
+                    
+                    // Clean temporary files
+                    sh "rm -f temp-*-deployment.yaml || true"
+                    sh "rm -f build-*.log || true"
+                    sh "rm -f *-vulnerabilities.json || true"
+                    
+                    def buildStatus = currentBuild.currentResult
+                    echo "Pipeline Status: ${buildStatus}"
+                    echo "Environment: ${params.TARGET_ENV}"
+                    echo "Image Tag: ${params.IMAGE_TAG}"
+                    echo "Tests: ${params.SKIP_TESTS ? 'SKIPPED' : 'EXECUTED'}"
+                    echo "Security Scan: ${params.SKIP_SECURITY_SCAN ? 'SKIPPED' : 'EXECUTED'}"
+                    echo "Railway Deployment: ${params.DEPLOY_TO_RAILWAY ? 'EXECUTED' : 'SKIPPED'}"
+                    echo "Local K8s Deployment: ${params.DEPLOY_TO_LOCAL_K8S ? 'EXECUTED' : 'SKIPPED'}"
+                }
             }
         }
         
