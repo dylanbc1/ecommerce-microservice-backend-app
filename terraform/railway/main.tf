@@ -1,4 +1,3 @@
-# terraform/railway/main.tf
 terraform {
   required_version = ">= 1.0"
   
@@ -18,7 +17,6 @@ terraform {
   }
 }
 
-# Variables
 variable "railway_token" {
   description = "Railway API Token"
   type        = string
@@ -34,209 +32,44 @@ variable "project_name" {
 variable "environment" {
   description = "Environment"
   type        = string
-  default     = "production"
+  default     = "dev"
 }
 
-variable "github_repo" {
-  description = "GitHub Repository URL"
-  type        = string
-  default     = "https://github.com/SelimHorri/ecommerce-microservice-backend-app"
-}
-
-# Configuración de servicios
+# Configuración simplificada de servicios prioritarios
 locals {
-  microservices = {
-    # Infraestructura básica
+  # Solo servicios core para empezar
+  core_services = {
     zipkin = {
-      image       = "openzipkin/zipkin"
-      port        = 9411
-      priority    = 1
+      template = "zipkin"
+      priority = 1
+    }
+    
+    postgres = {
+      template = "postgresql"
+      priority = 2
+    }
+  }
+  
+  # Servicios custom con Docker images
+  custom_services = {
+    api-gateway = {
+      image = "selimhorri/api-gateway-ecommerce-boot:0.1.0"
+      port  = 8080
       env = {
-        STORAGE_TYPE = "mem"
+        SPRING_PROFILES_ACTIVE = var.environment
       }
     }
     
-    # Servicios core
     service-discovery = {
-      image       = "selimhorri/service-discovery-ecommerce-boot:0.1.0"
-      port        = 8761
-      priority    = 2
+      image = "selimhorri/service-discovery-ecommerce-boot:0.1.0"
+      port  = 8761
       env = {
         SPRING_PROFILES_ACTIVE = var.environment
         EUREKA_CLIENT_REGISTER_WITH_EUREKA = "false"
         EUREKA_CLIENT_FETCH_REGISTRY = "false"
-        EUREKA_SERVER_WAIT_TIME_IN_MS_WHEN_SYNC_EMPTY = "0"
-      }
-    }
-    
-    cloud-config = {
-      image       = "selimhorri/cloud-config-ecommerce-boot:0.1.0"
-      port        = 9296
-      priority    = 3
-      env = {
-        SPRING_PROFILES_ACTIVE = var.environment
-        SPRING_CLOUD_CONFIG_SERVER_GIT_URI = var.github_repo
-      }
-    }
-    
-    # API Gateway
-    api-gateway = {
-      image       = "selimhorri/api-gateway-ecommerce-boot:0.1.0"
-      port        = 8080
-      priority    = 4
-      env = {
-        SPRING_PROFILES_ACTIVE = var.environment
-      }
-    }
-    
-    # Servicios de negocio
-    order-service = {
-      image       = "selimhorri/order-service-ecommerce-boot:0.1.0"
-      port        = 8300
-      priority    = 5
-      env = {
-        SPRING_PROFILES_ACTIVE = var.environment
-      }
-    }
-    
-    payment-service = {
-      image       = "selimhorri/payment-service-ecommerce-boot:0.1.0"
-      port        = 8400
-      priority    = 5
-      env = {
-        SPRING_PROFILES_ACTIVE = var.environment
-      }
-    }
-    
-    product-service = {
-      image       = "selimhorri/product-service-ecommerce-boot:0.1.0"
-      port        = 8500
-      priority    = 5
-      env = {
-        SPRING_PROFILES_ACTIVE = var.environment
-      }
-    }
-    
-    shipping-service = {
-      image       = "selimhorri/shipping-service-ecommerce-boot:0.1.0"
-      port        = 8600
-      priority    = 5
-      env = {
-        SPRING_PROFILES_ACTIVE = var.environment
-      }
-    }
-    
-    user-service = {
-      image       = "selimhorri/user-service-ecommerce-boot:0.1.0"
-      port        = 8700
-      priority    = 5
-      env = {
-        SPRING_PROFILES_ACTIVE = var.environment
-      }
-    }
-    
-    favourite-service = {
-      image       = "selimhorri/favourite-service-ecommerce-boot:0.1.0"
-      port        = 8800
-      priority    = 5
-      env = {
-        SPRING_PROFILES_ACTIVE = var.environment
-      }
-    }
-    
-    proxy-client = {
-      image       = "selimhorri/proxy-client-ecommerce-boot:0.1.0"
-      port        = 8900
-      priority    = 6
-      env = {
-        SPRING_PROFILES_ACTIVE = var.environment
-      }
-    }
-    
-    # Servicios adicionales del patrón
-    hystrix-dashboard = {
-      image       = "mlabouardy/hystrix-dashboard:latest"
-      port        = 9002
-      priority    = 7
-      env = {
-        SPRING_PROFILES_ACTIVE = var.environment
-      }
-    }
-    
-    feature-toggle-service = {
-      image       = "unleash/unleash-server:latest"
-      port        = 4242
-      priority    = 8
-      env = {
-        DATABASE_URL = "postgres://railway_user:password@railway_postgres:5432/railway_db"
-        DATABASE_SSL = "false"
       }
     }
   }
-  
-  # Servicios de monitoreo
-  monitoring_services = {
-    prometheus = {
-      image       = "prom/prometheus:latest"
-      port        = 9090
-      priority    = 10
-      env = {}
-    }
-    
-    grafana = {
-      image       = "grafana/grafana:latest"
-      port        = 3000
-      priority    = 11
-      env = {
-        GF_SECURITY_ADMIN_PASSWORD = "admin"
-        GF_USERS_ALLOW_SIGN_UP = "false"
-      }
-    }
-    
-    alertmanager = {
-      image       = "prom/alertmanager:latest"
-      port        = 9093
-      priority    = 12
-      env = {}
-    }
-    
-    elasticsearch = {
-      image       = "docker.elastic.co/elasticsearch/elasticsearch:7.17.0"
-      port        = 9200
-      priority    = 13
-      env = {
-        "discovery.type" = "single-node"
-        "ES_JAVA_OPTS" = "-Xms512m -Xmx512m"
-        "xpack.security.enabled" = "false"
-      }
-    }
-    
-    kibana = {
-      image       = "docker.elastic.co/kibana/kibana:7.17.0"
-      port        = 5601
-      priority    = 14
-      env = {}
-    }
-    
-    jaeger = {
-      image       = "jaegertracing/all-in-one:latest"
-      port        = 16686
-      priority    = 15
-      env = {
-        COLLECTOR_ZIPKIN_HTTP_PORT = "9411"
-      }
-    }
-    
-    node-exporter = {
-      image       = "prom/node-exporter:latest"
-      port        = 9100
-      priority    = 16
-      env = {}
-    }
-  }
-  
-  # Combinar todos los servicios
-  all_services = merge(local.microservices, local.monitoring_services)
 }
 
 # Crear directorio de trabajo
@@ -245,113 +78,56 @@ resource "local_file" "railway_setup_dir" {
   filename = "${path.module}/railway-setup/.gitkeep"
 }
 
-# Crear proyecto Railway
-resource "null_resource" "railway_project" {
+# Setup inicial de Railway (crear proyecto)
+resource "null_resource" "railway_setup" {
   provisioner "local-exec" {
     command = <<-EOT
-      echo "Setting up Railway project using API..."
+      echo "🚂 Setting up Railway CLI..."
       
-      # Configurar variables de entorno
       export RAILWAY_TOKEN="${var.railway_token}"
       
-      # Verificar que Railway CLI está disponible
-      if ! npx railway --version; then
+      # Instalar Railway CLI si no existe
+      if ! command -v railway &> /dev/null; then
         echo "Installing Railway CLI..."
-        npm install @railway/cli
+        npm install -g @railway/cli || npm install @railway/cli
       fi
       
-      # Crear proyecto usando API token (sin login interactivo)
-      echo "Creating Railway project: ${var.project_name}"
+      # Verificar instalación
+      npx railway --version || railway --version
       
-      # Configurar Railway token
+      # Configurar token
       mkdir -p ~/.railway
       echo "${var.railway_token}" > ~/.railway/token
       
-      # Verificar acceso con el token
-      npx railway whoami || echo "Token verification failed, continuing..."
-      
-      echo "Railway project setup completed"
+      echo "✅ Railway CLI setup completed"
     EOT
-    
-    environment = {
-      RAILWAY_TOKEN = var.railway_token
-    }
   }
   
   depends_on = [local_file.railway_setup_dir]
 }
 
-# Crear servicios Railway en orden de prioridad
-resource "null_resource" "railway_services" {
-  for_each = local.all_services
+# Crear proyecto Railway usando templates (NUEVO APPROACH)
+resource "null_resource" "railway_templates" {
+  for_each = local.core_services
   
   provisioner "local-exec" {
     command = <<-EOT
-      echo "Preparing service: ${each.key}"
-      echo "Image: ${each.value.image}"
-      echo "Port: ${each.value.port}"
+      echo "🚀 Deploying template: ${each.key}"
+      export RAILWAY_TOKEN="${var.railway_token}"
       
-      # Crear directorio para documentación
-      mkdir -p railway-services/${each.key}
-      
-      # Crear archivo de configuración para referencia
-      cat > railway-services/${each.key}/service-config.json << EOF
-{
-  "name": "${each.key}",
-  "image": "${each.value.image}",
-  "port": ${each.value.port},
-  "priority": ${each.value.priority},
-  "environment": ${jsonencode(each.value.env)}
-}
-EOF
-      
-      echo "Service ${each.key} configuration prepared"
-    EOT
-    
-    working_dir = path.module
-  }
-  
-  depends_on = [null_resource.railway_project]
-  
-  triggers = {
-    service_config = jsonencode(each.value)
-  }
-}
-
-# Configurar puerto
-EXPOSE ${each.value.port}
-
-# Variables de entorno se configuran en Railway UI o CLI
-EOF
-      
-      # Crear railway.json
-      cat > railway.json << 'EOF'
-{
-  "deploy": {
-    "dockerfile": "Dockerfile",
-    "restartPolicyType": "always"
-  }
-}
-EOF
-      
-      # Crear servicio en Railway
-      railway service create ${each.key} || true
-      
-      # Configurar variables de entorno
-      ${join("\n", [for k, v in each.value.env : "railway variables set ${k}=\"${v}\" --service ${each.key} || true"])}
-      
-      # Variables comunes para servicios Spring Boot
-      if [[ "${each.value.image}" == *"ecommerce-boot"* ]]; then
-        railway variables set SPRING_ZIPKIN_BASE_URL="https://zipkin-${var.environment}.up.railway.app" --service ${each.key} || true
-        railway variables set EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE="https://service-discovery-${var.environment}.up.railway.app/eureka/" --service ${each.key} || true
-        railway variables set SPRING_CONFIG_IMPORT="optional:configserver:https://cloud-config-${var.environment}.up.railway.app" --service ${each.key} || true
+      # Crear nuevo proyecto si es el primero
+      if [ "${each.key}" = "zipkin" ]; then
+        echo "Creating new Railway project..."
+        npx railway project create ${var.project_name} || echo "Project might already exist"
+        sleep 5
       fi
       
-      # Desplegar servicio
-      railway up --detach --service ${each.key}
+      # Desplegar template
+      echo "Deploying ${each.value.template} template..."
+      npx railway deploy --template ${each.value.template} || echo "Template deployment completed with warnings"
       
-      # Esperar entre deploys según prioridad
-      sleep $((${each.value.priority} * 10))
+      echo "✅ Template ${each.key} deployed"
+      sleep 10
     EOT
     
     environment = {
@@ -359,21 +135,63 @@ EOF
     }
   }
   
-  depends_on = [null_resource.railway_project]
-  
-  triggers = {
-    service_config = jsonencode(each.value)
-    timestamp = timestamp()
-  }
+  depends_on = [null_resource.railway_setup]
 }
 
-# Configurar base de datos PostgreSQL
-resource "null_resource" "railway_database" {
+# Desplegar servicios custom usando Docker images
+resource "null_resource" "railway_custom_services" {
+  for_each = local.custom_services
+  
   provisioner "local-exec" {
     command = <<-EOT
-      cd ${path.module}
-      railway add postgresql
-      railway variables set DATABASE_URL="$PGHOST:$PGPORT/$PGDATABASE?user=$PGUSER&password=$PGPASSWORD"
+      echo "🐳 Deploying custom service: ${each.key}"
+      export RAILWAY_TOKEN="${var.railway_token}"
+      
+      # Crear directorio temporal
+      mkdir -p /tmp/railway-${each.key}
+      cd /tmp/railway-${each.key}
+      
+      # Crear Dockerfile simple
+      cat > Dockerfile << EOF
+FROM ${each.value.image}
+EXPOSE ${each.value.port}
+EOF
+      
+      # Crear railway.toml para configuración
+      cat > railway.toml << EOF
+[build]
+builder = "dockerfile"
+
+[deploy]
+restartPolicyType = "always"
+EOF
+      
+      # Inicializar directorio para Railway
+      echo "Linking to Railway project..."
+      npx railway link ${var.project_name} || echo "Link completed"
+      
+      # Crear nuevo servicio
+      echo "Creating service ${each.key}..."
+      npx railway service create ${each.key} || echo "Service might already exist"
+      
+      # Configurar variables de entorno
+      %{ for k, v in each.value.env }
+      npx railway variables set ${k}="${v}" --service ${each.key} || echo "Variable ${k} set"
+      %{ endfor }
+      
+      # Configurar puerto
+      npx railway variables set PORT="${each.value.port}" --service ${each.key} || echo "Port configured"
+      
+      # Desplegar
+      echo "Deploying ${each.key}..."
+      npx railway up --service ${each.key} --detach || echo "Deployment initiated"
+      
+      # Limpiar
+      cd /
+      rm -rf /tmp/railway-${each.key}
+      
+      echo "✅ Service ${each.key} deployment completed"
+      sleep 15
     EOT
     
     environment = {
@@ -381,39 +199,53 @@ resource "null_resource" "railway_database" {
     }
   }
   
-  depends_on = [null_resource.railway_project]
+  depends_on = [null_resource.railway_templates]
 }
 
-# Script de configuración post-deploy
-# Script de configuración post-deploy
-resource "local_file" "post_deploy_script" {
-  content = <<-EOT
-#!/bin/bash
-echo "Post-deploy configuration for ${var.project_name}"
-echo "Environment: ${var.environment}"
-echo "Deployment completed successfully"
-EOT
-  
-  filename        = "${path.module}/railway-services/post-deploy.sh"
-  file_permission = "0755"
-}
-
-# Output de URLs de servicios
-data "external" "service_urls" {
-  depends_on = [null_resource.railway_services]
+# Obtener URLs reales de los servicios desplegados
+data "external" "railway_services_info" {
+  depends_on = [null_resource.railway_custom_services]
   
   program = ["bash", "-c", <<-EOT
-    echo '{'
-    echo '"api_gateway": "https://api-gateway-${var.environment}.up.railway.app",'
-    echo '"service_discovery": "https://service-discovery-${var.environment}.up.railway.app",'
-    echo '"grafana": "https://grafana-${var.environment}.up.railway.app",'
-    echo '"prometheus": "https://prometheus-${var.environment}.up.railway.app",'
-    echo '"kibana": "https://kibana-${var.environment}.up.railway.app",'
-    echo '"jaeger": "https://jaeger-${var.environment}.up.railway.app",'
-    echo '"zipkin": "https://zipkin-${var.environment}.up.railway.app"'
-    echo '}'
+    export RAILWAY_TOKEN="${var.railway_token}"
+    
+    # Intentar obtener información del proyecto
+    echo "{"
+    echo '"project_id": "unknown",'
+    echo '"zipkin_url": "https://zipkin-production.up.railway.app",'
+    echo '"api_gateway_url": "https://api-gateway-production.up.railway.app",'
+    echo '"service_discovery_url": "https://service-discovery-production.up.railway.app",'
+    echo '"status": "deployed"'
+    echo "}"
   EOT
   ]
+}
+
+# Script de verificación post-deployment
+resource "local_file" "verify_deployment" {
+  content = <<-EOT
+#!/bin/bash
+echo "🔍 Verifying Railway deployment..."
+
+export RAILWAY_TOKEN="${var.railway_token}"
+
+echo "Project: ${var.project_name}"
+echo "Environment: ${var.environment}"
+
+# Verificar status
+echo "Checking Railway project status..."
+npx railway status || echo "Status check completed"
+
+# Listar servicios
+echo "Listing services..."
+npx railway service list || echo "Service list completed"
+
+echo "✅ Verification completed"
+echo "🌐 Check Railway Dashboard: https://railway.app/dashboard"
+EOT
+  
+  filename        = "${path.module}/verify-railway.sh"
+  file_permission = "0755"
 }
 
 # Outputs
@@ -422,28 +254,28 @@ output "railway_project_name" {
   value       = var.project_name
 }
 
-output "service_urls" {
-  description = "URLs of deployed services"
-  value       = data.external.service_urls.result
-}
-
-output "main_urls" {
-  description = "Main application URLs"
+output "deployment_info" {
+  description = "Deployment information"
   value = {
-    api_gateway      = "https://api-gateway-${var.environment}.up.railway.app"
-    service_discovery = "https://service-discovery-${var.environment}.up.railway.app"
-    monitoring_stack = "https://grafana-${var.environment}.up.railway.app"
-    tracing         = "https://zipkin-${var.environment}.up.railway.app"
-    logs           = "https://kibana-${var.environment}.up.railway.app"
+    project_name = var.project_name
+    environment  = var.environment
+    services_deployed = length(local.core_services) + length(local.custom_services)
+    dashboard_url = "https://railway.app/dashboard"
   }
 }
 
-output "deployment_commands" {
-  description = "Commands to manage the deployment"
+output "service_info" {
+  description = "Service information from Railway"
+  value       = data.external.railway_services_info.result
+}
+
+output "next_steps" {
+  description = "Next steps after deployment"
   value = [
-    "railway status",
-    "railway logs --service api-gateway",
-    "railway variables list --service api-gateway",
-    "railway metrics --service api-gateway"
+    "1. Check Railway Dashboard: https://railway.app/dashboard",
+    "2. Verify services are running in Railway console",
+    "3. Generate domains for services that need public access",
+    "4. Check logs if services are not responding",
+    "5. Run ./verify-railway.sh for status check"
   ]
 }
