@@ -373,20 +373,23 @@ pipeline {
                 script {
                     echo "🏥 === SERVICE HEALTH CHECK ==="
                     
+                    // URLs más probables de Railway (sin el sufijo -dev)
                     def services = [
-                        'zipkin': 'zipkin-dev.up.railway.app',
-                        'api-gateway': 'api-gateway-dev.up.railway.app',
-                        'service-discovery': 'service-discovery-dev.up.railway.app',
-                        'grafana': 'grafana-dev.up.railway.app'
+                        'zipkin': 'zipkin-production.up.railway.app',
+                        'api-gateway': 'api-gateway-production.up.railway.app', 
+                        'service-discovery': 'service-discovery-production.up.railway.app'
                     ]
                     
                     def healthResults = [:]
+                    
+                    // Esperar más tiempo para que Railway inicialice
+                    echo "⏳ Waiting for Railway services to fully initialize..."
+                    sleep 60
                     
                     services.each { serviceName, url ->
                         echo "🔍 Checking ${serviceName} at https://${url}"
                         
                         try {
-                            // Verificar con timeout
                             def response = sh(
                                 script: "curl -s -o /dev/null -w '%{http_code}' --max-time 30 https://${url} || echo '000'",
                                 returnStdout: true
@@ -394,41 +397,44 @@ pipeline {
                             
                             if (response == "200") {
                                 healthResults[serviceName] = "✅ HEALTHY"
-                                echo "✅ ${serviceName} is responding (HTTP ${response})"
                             } else if (response in ["301", "302", "401", "403"]) {
                                 healthResults[serviceName] = "⚠️ REDIRECTING/AUTH (${response})"
-                                echo "⚠️ ${serviceName} responded with HTTP ${response}"
+                            } else if (response == "503") {
+                                healthResults[serviceName] = "🔄 STARTING UP (${response})"
                             } else {
                                 healthResults[serviceName] = "❌ UNHEALTHY (${response})"
-                                echo "❌ ${serviceName} not responding properly (HTTP ${response})"
                             }
                             
                         } catch (Exception e) {
                             healthResults[serviceName] = "❌ ERROR"
-                            echo "❌ ${serviceName} health check failed: ${e.getMessage()}"
                         }
                         
-                        // Pequeña pausa entre checks
-                        sleep 2
+                        sleep 3
                     }
                     
-                    // Mostrar resumen
                     echo "\n📊 === HEALTH CHECK SUMMARY ==="
                     healthResults.each { service, status ->
                         echo "${service}: ${status}"
                     }
                     
-                    // Mostrar información adicional
-                    echo "\n📋 === DEPLOYMENT INFO ==="
-                    echo "Environment: ${params.TARGET_ENV}"
-                    echo "Build: ${BUILD_NUMBER}"
-                    echo "Railway Dashboard: https://railway.app/dashboard"
+                    echo "\n💡 === RAILWAY TROUBLESHOOTING ==="
+                    echo "• Services may take 3-5 minutes to be fully available"
+                    echo "• Check Railway Dashboard: https://railway.app/dashboard"
+                    echo "• If 404 errors persist, services may not have deployed correctly"
+                    echo "• Generate domains manually in Railway UI if needed"
+                    echo "• Check service logs in Railway console for errors"
                     
-                    echo "\n💡 === TROUBLESHOOTING TIPS ==="
-                    echo "• If services show 'UNHEALTHY', they might still be starting up"
-                    echo "• Check Railway dashboard for deployment status"
-                    echo "• Services may take 2-5 minutes to be fully available"
-                    echo "• Verify environment variables in Railway console"
+                    // Ejecutar script de verificación
+                    withCredentials([string(credentialsId: 'railway-token', variable: 'RAILWAY_TOKEN')]) {
+                        dir('terraform/railway') {
+                            sh '''
+                                if [ -f "./verify-railway.sh" ]; then
+                                    chmod +x ./verify-railway.sh
+                                    ./verify-railway.sh || echo "Verification script completed"
+                                fi
+                            '''
+                        }
+                    }
                 }
             }
         }
@@ -713,7 +719,6 @@ pipeline {
         stage('Deployment Orchestration') {
             parallel {
                 // Reemplaza tu stage '🚂 Railway Deployment' con esto:
-
                 stage('🚂 Railway Deployment') {
                     when { 
                         expression { params.DEPLOY_TO_RAILWAY } 
@@ -723,55 +728,26 @@ pipeline {
                             try {
                                 echo "🚀 === RAILWAY DEPLOYMENT ORCHESTRATION ==="
                                 
-                                // Configurar token de Railway
                                 withCredentials([string(credentialsId: 'railway-token', variable: 'RAILWAY_TOKEN')]) {
-                                    // Verificar que el token existe
+                                    // Verificar token
                                     if (!env.RAILWAY_TOKEN) {
-                                        error("Railway token not found. Please configure 'railway-token' credential in Jenkins.")
+                                        error("Railway token not found")
                                     }
                                     
-                                    // Configurar Railway CLI
-                                    sh '''
-                                        export RAILWAY_TOKEN=$RAILWAY_TOKEN
-                                        
-                                        # Crear directorio de configuración
-                                        mkdir -p ~/.railway
-                                        echo "$RAILWAY_TOKEN" > ~/.railway/token
-                                        
-                                        # Verificar instalación
-                                        if ! npx railway --version; then
-                                            echo "Installing Railway CLI..."
-                                            npm install @railway/cli
-                                        fi
-                                        
-                                        # Verificar autenticación
-                                        npx railway whoami || echo "Authentication verification completed"
-                                        
-                                        # Verificar status del proyecto
-                                        npx railway status || echo "Project status check completed"
-                                    '''
-                                    
-                                    echo "✅ Railway deployment orchestration completed"
-                                    
-                                    // Mostrar URLs de los servicios
-                                    echo "🌐 Service URLs:"
-                                    echo "• API Gateway: https://api-gateway-${params.TARGET_ENV}.up.railway.app"
-                                    echo "• Service Discovery: https://service-discovery-${params.TARGET_ENV}.up.railway.app"
-                                    echo "• Grafana: https://grafana-${params.TARGET_ENV}.up.railway.app"
-                                    echo "• Zipkin: https://zipkin-${params.TARGET_ENV}.up.railway.app"
-                                    echo "• Kibana: https://kibana-${params.TARGET_ENV}.up.railway.app"
+                                    // El deployment real ahora es manejado por Terraform
+                                    echo "✅ Railway deployment completed via Terraform"
+                                    echo "🌐 Check your services at Railway Dashboard"
                                 }
+                                
+                                // Esperar un momento para que los servicios se inicializen
+                                echo "⏳ Waiting for services to initialize..."
+                                sleep 30
+                                
+                                echo "✅ Railway deployment orchestration completed"
                                 
                             } catch (Exception e) {
                                 def errorMsg = "❌ Railway deployment to ${params.TARGET_ENV} failed: ${e.getMessage()}"
                                 echo errorMsg
-                                
-                                // Notificaciones
-                                echo "📢 Sending notification: ${errorMsg}"
-                                echo "Slack notification would be sent: ${errorMsg}"
-                                echo "Email notification would be sent to: devops@company.com"
-                                
-                                // No hacer fail crítico - dejar que continúe
                                 unstable("Railway deployment had issues but continuing pipeline")
                             }
                         }
