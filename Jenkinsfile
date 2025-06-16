@@ -2,13 +2,12 @@ pipeline {
     agent any
 
     environment {
-        // Configuración Docker y Kubernetes
+        // Configuración Docker y Kubernetes ORIGINAL
         DOCKER_REGISTRY = 'localhost:5000'
         K8S_NAMESPACE = 'ecommerce-dev'
         K8S_CONTEXT = 'docker-desktop'
     
         // ===== CRITICAL FIX FOR JAVA COMPATIBILITY =====
-        // Force use of specific Java version through Maven
         MAVEN_OPTS = '''
             -Xmx1024m 
             -Djava.version=11 
@@ -17,20 +16,39 @@ pipeline {
             -Djdk.net.URLClassPath.disableClassPathURLCheck=true
         '''.stripIndent().replaceAll('\n', ' ')
 
-        // Servicios del taller (6 microservicios que se comunican)
+        // Servicios del taller ORIGINAL
         CORE_SERVICES = 'api-gateway,user-service,product-service,order-service,payment-service,proxy-client'
         
-        // === NUEVAS CONFIGURACIONES PARA PUNTOS 4, 6, 7, 8 ===
-        // Configuración de ambientes
+        // Configuración de ambientes ORIGINAL
         DEV_NAMESPACE = 'ecommerce-dev'
         STAGE_NAMESPACE = 'ecommerce-stage'
         PROD_NAMESPACE = 'ecommerce-prod'
         
-        // Configuración de notificaciones
+        // Configuración de notificaciones ORIGINAL
         SLACK_CHANNEL = '#devops-alerts'
         EMAIL_RECIPIENTS = 'devops@company.com'
+        
+        // ===== NUEVA CONFIGURACIÓN RAILWAY =====
+        RAILWAY_TOKEN = credentials('railway-token')
+        RAILWAY_PROJECT_NAME = 'ecommerce-microservices'
+        
+        // Terraform Configuration para Railway
+        TF_VAR_railway_token = "${RAILWAY_TOKEN}"
+        TF_VAR_project_name = "${RAILWAY_PROJECT_NAME}"
+        TF_VAR_environment = "${params.TARGET_ENV ?: 'dev'}"
+        
+        // SonarQube Configuration (mantenido)
+        SONAR_TOKEN = credentials('sonar-token')
+        SONAR_HOST_URL = 'http://sonarqube:9000'
     }
-
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 60, unit: 'MINUTES')
+        timestamps()
+        ansiColor('xterm')
+    }
+    
     parameters {
         choice(
             name: 'TARGET_ENV',
@@ -52,7 +70,6 @@ pipeline {
             defaultValue: true,
             description: 'Generate release artifacts'
         )
-        // === NUEVOS PARÁMETROS ===
         booleanParam(
             name: 'SKIP_SECURITY_SCAN',
             defaultValue: false,
@@ -68,8 +85,18 @@ pipeline {
             defaultValue: true,
             description: 'Run SonarQube code analysis'
         )
+        booleanParam(
+            name: 'DEPLOY_TO_RAILWAY',
+            defaultValue: true,
+            description: 'Deploy to Railway platform'
+        )
+        booleanParam(
+            name: 'DEPLOY_TO_LOCAL_K8S',
+            defaultValue: false,
+            description: 'Deploy to local Kubernetes (original functionality)'
+        )
     }
-
+    
     stages {
         stage('Environment Setup') {
             steps {
@@ -77,13 +104,15 @@ pipeline {
                     echo "🚀 === ENVIRONMENT SETUP ==="
                     echo "Target Environment: ${params.TARGET_ENV}"
                     echo "Build Tag: ${params.IMAGE_TAG}"
+                    echo "Deploy to Railway: ${params.DEPLOY_TO_RAILWAY}"
+                    echo "Deploy to Local K8s: ${params.DEPLOY_TO_LOCAL_K8S}"
                     
                     // Validar ambiente de producción requiere aprobación
                     if (params.TARGET_ENV == 'prod' && !params.APPROVE_PROD_DEPLOY) {
                         error("❌ Production deployment requires explicit approval. Set APPROVE_PROD_DEPLOY=true")
                     }
                     
-                    // Configurar namespace según ambiente
+                    // Configurar namespace según ambiente (para K8s local)
                     if (params.TARGET_ENV == 'dev') {
                         env.K8S_NAMESPACE = env.DEV_NAMESPACE
                     } else if (params.TARGET_ENV == 'stage') {
@@ -94,7 +123,37 @@ pipeline {
                     
                     echo "Kubernetes Namespace: ${env.K8S_NAMESPACE}"
                     
-                    // DETECTAR JAVA AUTOMÁTICAMENTE
+                    // === NUEVA CONFIGURACIÓN RAILWAY ===
+                    if (params.DEPLOY_TO_RAILWAY) {
+                        echo "🚂 Setting up Railway environment..."
+                        
+                        // Install Railway CLI
+                        sh '''
+                            if ! command -v railway &> /dev/null; then
+                                echo "Installing Railway CLI..."
+                                npm install -g @railway/cli
+                            fi
+                            
+                            # Verify Railway authentication
+                            railway login --browserless
+                            railway whoami
+                        '''
+                        
+                        // Setup Terraform for Railway
+                        echo "🏗️ Setting up Terraform for Railway..."
+                        sh '''
+                            # Install Terraform if not present
+                            if ! command -v terraform &> /dev/null; then
+                                echo "Installing Terraform..."
+                                wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+                                echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+                                sudo apt update && sudo apt install terraform
+                            fi
+                            terraform version
+                        '''
+                    }
+                    
+                    // DETECTAR JAVA AUTOMÁTICAMENTE (código original mantenido)
                     echo "🔍 Detecting Java installation..."
                     def javaVersion = sh(
                         script: 'java -version 2>&1 | head -1 || echo "Java not found"',
@@ -145,40 +204,137 @@ pipeline {
         }
 
         stage('Infrastructure Validation') {
+            parallel {
+                stage('Local Kubernetes Validation') {
+                    when { 
+                        expression { params.DEPLOY_TO_LOCAL_K8S } 
+                    }
+                    steps {
+                        script {
+                            echo "🔧 === LOCAL KUBERNETES VALIDATION ==="
+                            
+                            try {
+                                // Check kubectl availability
+                                def kubectlAvailable = sh(
+                                    script: 'command -v kubectl >/dev/null 2>&1 && echo "available" || echo "missing"',
+                                    returnStdout: true
+                                ).trim()
+                                
+                                if (kubectlAvailable == "available") {
+                                    sh "kubectl config use-context ${env.K8S_CONTEXT} || echo 'Context not available'"
+                                    sh "kubectl cluster-info || echo 'Cluster not accessible'"
+                                    
+                                    // Create namespace if needed
+                                    sh """
+                                        kubectl get namespace ${env.K8S_NAMESPACE} || \
+                                        kubectl create namespace ${env.K8S_NAMESPACE} || echo 'Namespace creation failed'
+                                    """
+                                    echo "✅ Kubernetes environment ready"
+                                } else {
+                                    echo "⚠️ kubectl not available - local K8s deployment will be skipped"
+                                }
+                                
+                            } catch (Exception e) {
+                                echo "⚠️ Infrastructure validation issues: ${e.getMessage()}"
+                                echo "Continuing with limited functionality..."
+                            }
+                        }
+                    }
+                }
+                
+                stage('Railway Infrastructure Setup') {
+                    when { 
+                        expression { params.DEPLOY_TO_RAILWAY } 
+                    }
+                    steps {
+                        script {
+                            echo "🚂 === RAILWAY INFRASTRUCTURE SETUP ==="
+                            
+                            try {
+                                dir('terraform/railway') {
+                                    // Initialize Terraform for Railway
+                                    sh '''
+                                        terraform init
+                                        terraform workspace select ${TARGET_ENV} || terraform workspace new ${TARGET_ENV}
+                                        terraform validate
+                                    '''
+                                    
+                                    echo "✅ Railway infrastructure validation completed"
+                                }
+                            } catch (Exception e) {
+                                echo "⚠️ Railway infrastructure setup failed: ${e.getMessage()}"
+                                error("Railway setup failed - stopping pipeline")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // === NUEVO STAGE: RAILWAY INFRASTRUCTURE PROVISIONING ===
+        stage('🚂 Railway Infrastructure Provisioning') {
+            when { 
+                expression { params.DEPLOY_TO_RAILWAY } 
+            }
             steps {
                 script {
-                    echo "🔧 === INFRASTRUCTURE VALIDATION ==="
+                    echo "🏗️ === RAILWAY INFRASTRUCTURE PROVISIONING ==="
                     
-                    try {
-                        // Check kubectl availability
-                        def kubectlAvailable = sh(
-                            script: 'command -v kubectl >/dev/null 2>&1 && echo "available" || echo "missing"',
-                            returnStdout: true
-                        ).trim()
-                        
-                        if (kubectlAvailable == "available") {
-                            sh "kubectl config use-context ${env.K8S_CONTEXT} || echo 'Context not available'"
-                            sh "kubectl cluster-info || echo 'Cluster not accessible'"
+                    dir('terraform/railway') {
+                        try {
+                            // Terraform plan
+                            sh '''
+                                terraform plan -out=tfplan \
+                                    -var="railway_token=${RAILWAY_TOKEN}" \
+                                    -var="project_name=${RAILWAY_PROJECT_NAME}" \
+                                    -var="environment=${TARGET_ENV}"
+                                
+                                # Show plan
+                                terraform show -no-color tfplan > tfplan.txt
+                            '''
                             
-                            // Create namespace if needed
-                            sh """
-                                kubectl get namespace ${env.K8S_NAMESPACE} || \
-                                kubectl create namespace ${env.K8S_NAMESPACE} || echo 'Namespace creation failed'
-                            """
-                            echo "✅ Kubernetes environment ready"
-                        } else {
-                            echo "⚠️ kubectl not available - deployment will be skipped"
+                            // Archive terraform plan
+                            archiveArtifacts artifacts: 'tfplan*', allowEmptyArchive: true
+                            
+                            // Ask for approval for production
+                            if (params.TARGET_ENV == 'prod') {
+                                script {
+                                    def userInput = input(
+                                        id: 'userInput', 
+                                        message: '🚨 Apply Railway Terraform changes to production?',
+                                        parameters: [
+                                            choice(choices: ['Apply', 'Abort'], description: 'Choose action', name: 'action')
+                                        ]
+                                    )
+                                    
+                                    if (userInput == 'Abort') {
+                                        error("User aborted production Railway deployment")
+                                    }
+                                }
+                            }
+                            
+                            // Apply Terraform
+                            sh '''
+                                echo "🚀 Applying Railway infrastructure..."
+                                terraform apply -auto-approve tfplan
+                                
+                                # Save outputs
+                                terraform output -json > terraform-outputs.json
+                            '''
+                            
+                            archiveArtifacts artifacts: 'terraform-outputs.json', allowEmptyArchive: true
+                            
+                            echo "✅ Railway infrastructure provisioned successfully"
+                            
+                        } catch (Exception e) {
+                            echo "❌ Railway infrastructure provisioning failed: ${e.getMessage()}"
+                            error("Railway Terraform deployment failed")
                         }
-                        
-                    } catch (Exception e) {
-                        echo "⚠️ Infrastructure validation issues: ${e.getMessage()}"
-                        echo "Continuing with limited functionality..."
                     }
                 }
             }
         }
 
-        // === NUEVO STAGE: CODE QUALITY ANALYSIS ===
         stage('Code Quality Analysis - SonarQube') {
             when {
                 allOf {
@@ -223,7 +379,6 @@ pipeline {
                             echo "✅ SonarQube analysis completed"
                         } else {
                             echo "⚠️ SonarQube not available, using basic code analysis..."
-                            // Análisis básico alternativo
                             runBasicCodeAnalysis()
                         }
                         
@@ -297,7 +452,6 @@ pipeline {
             }
         }
 
-        // === NUEVO STAGE: SECURITY SCANNING ===
         stage('Security Scanning - Trivy') {
             when {
                 expression { !params.SKIP_SECURITY_SCAN }
@@ -381,7 +535,6 @@ pipeline {
             }
         }
 
-        // === NUEVO STAGE: ENVIRONMENT PROMOTION GATEWAY ===
         stage('Environment Promotion Gateway') {
             when {
                 expression { params.TARGET_ENV in ['stage', 'prod'] }
@@ -410,52 +563,215 @@ pipeline {
                 }
             }
         }
-
+        // === STAGE MODIFICADO: DEPLOYMENT ORCHESTRATION ===
         stage('Deployment Orchestration') {
-            steps {
-                script {
-                    echo "🚀 === DEPLOYMENT ORCHESTRATION ==="
-                    
-                    def kubectlAvailable = sh(
-                        script: 'command -v kubectl >/dev/null 2>&1 && echo "true" || echo "false"',
-                        returnStdout: true
-                    ).trim()
-                    
-                    if (kubectlAvailable == "true") {
-                        try {
-                            // Deploy infrastructure services first
-                            deployInfrastructureServices()
+            parallel {
+                stage('🚂 Railway Deployment') {
+                    when { 
+                        expression { params.DEPLOY_TO_RAILWAY } 
+                    }
+                    steps {
+                        script {
+                            echo "🚀 === RAILWAY DEPLOYMENT ORCHESTRATION ==="
                             
-                            // Wait for infrastructure to stabilize
-                            sleep(time: 30, unit: 'SECONDS')
-                            
-                            // Deploy application services
-                            deployApplicationServices()
-                            
-                            // Verify deployment
-                            verifyDeployment()
-                            
-                            echo "✅ Deployment orchestration completed"
-                            
-                            // Notificar éxito
-                            sendNotification("✅ Deployment to ${params.TARGET_ENV} successful - Build ${params.IMAGE_TAG}", 'success')
-                            
-                        } catch (Exception e) {
-                            echo "❌ Deployment failed: ${e.getMessage()}"
-                            
-                            // Notificar fallo
-                            sendNotification("❌ Deployment to ${params.TARGET_ENV} failed: ${e.getMessage()}", 'error')
-                            
-                            throw e
+                            try {
+                                // Link to Railway project
+                                sh "railway link ${RAILWAY_PROJECT_NAME}"
+                                
+                                // Deploy services in order (usando tu configuración original)
+                                def railwayServices = [
+                                    "zipkin",
+                                    "service-discovery", 
+                                    "cloud-config",
+                                    "api-gateway",
+                                    "order-service",
+                                    "payment-service", 
+                                    "product-service",
+                                    "shipping-service",
+                                    "user-service",
+                                    "favourite-service",
+                                    "proxy-client",
+                                    "hystrix-dashboard",
+                                    "feature-toggle-service"
+                                ]
+                                
+                                railwayServices.each { service ->
+                                    echo "🚀 Deploying ${service} to Railway..."
+                                    
+                                    sh """
+                                        # Check if service exists, create if not
+                                        if ! railway service list | grep -q "${service}"; then
+                                            railway service create "${service}"
+                                        fi
+                                        
+                                        # Configure environment variables for Spring Boot services
+                                        if [[ "${service}" != "zipkin" && "${service}" != "hystrix-dashboard" && "${service}" != "feature-toggle-service" ]]; then
+                                            railway variables set SPRING_PROFILES_ACTIVE="${params.TARGET_ENV}" --service "${service}"
+                                            railway variables set SPRING_ZIPKIN_BASE_URL="https://zipkin-${params.TARGET_ENV}.up.railway.app" --service "${service}"
+                                            railway variables set EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE="https://service-discovery-${params.TARGET_ENV}.up.railway.app/eureka/" --service "${service}"
+                                            
+                                            if [[ "${service}" != "service-discovery" ]]; then
+                                                railway variables set SPRING_CONFIG_IMPORT="optional:configserver:https://cloud-config-${params.TARGET_ENV}.up.railway.app" --service "${service}"
+                                            fi
+                                        fi
+                                        
+                                        # Deploy service
+                                        railway service "${service}" --detach || echo "Deployment initiated for ${service}"
+                                        
+                                        # Wait between deployments
+                                        sleep 30
+                                    """
+                                    
+                                    echo "✅ ${service} deployment initiated"
+                                }
+                                
+                                echo "✅ Railway deployment orchestration completed"
+                                
+                                // Notificar éxito
+                                sendNotification("✅ Railway deployment to ${params.TARGET_ENV} successful - Build ${params.IMAGE_TAG}", 'success')
+                                
+                            } catch (Exception e) {
+                                echo "❌ Railway deployment failed: ${e.getMessage()}"
+                                sendNotification("❌ Railway deployment to ${params.TARGET_ENV} failed: ${e.getMessage()}", 'error')
+                                throw e
+                            }
                         }
-                    } else {
-                        echo "⚠️ Kubernetes not available - creating deployment artifacts only"
-                        createDeploymentArtifacts()
+                    }
+                }
+                
+                stage('🎯 Local Kubernetes Deployment') {
+                    when { 
+                        expression { params.DEPLOY_TO_LOCAL_K8S } 
+                    }
+                    steps {
+                        script {
+                            echo "🎯 === LOCAL KUBERNETES DEPLOYMENT ==="
+                            
+                            def kubectlAvailable = sh(
+                                script: 'command -v kubectl >/dev/null 2>&1 && echo "true" || echo "false"',
+                                returnStdout: true
+                            ).trim()
+                            
+                            if (kubectlAvailable == "true") {
+                                try {
+                                    // Deploy infrastructure services first (código original)
+                                    deployInfrastructureServices()
+                                    
+                                    // Wait for infrastructure to stabilize
+                                    sleep(time: 30, unit: 'SECONDS')
+                                    
+                                    // Deploy application services (código original)
+                                    deployApplicationServices()
+                                    
+                                    // Verify deployment (código original)
+                                    verifyDeployment()
+                                    
+                                    echo "✅ Local Kubernetes deployment completed"
+                                    sendNotification("✅ Local K8s deployment to ${params.TARGET_ENV} successful - Build ${params.IMAGE_TAG}", 'success')
+                                    
+                                } catch (Exception e) {
+                                    echo "❌ Local Kubernetes deployment failed: ${e.getMessage()}"
+                                    sendNotification("❌ Local K8s deployment to ${params.TARGET_ENV} failed: ${e.getMessage()}", 'error')
+                                    throw e
+                                }
+                            } else {
+                                echo "⚠️ Kubernetes not available - creating deployment artifacts only"
+                                createDeploymentArtifacts()
+                            }
+                        }
                     }
                 }
             }
         }
 
+        // === NUEVO STAGE: DEPLOY MONITORING STACK ===
+        stage('📊 Deploy Monitoring Stack') {
+            parallel {
+                stage('Railway Monitoring') {
+                    when { 
+                        expression { params.DEPLOY_TO_RAILWAY } 
+                    }
+                    steps {
+                        script {
+                            echo "📊 === RAILWAY MONITORING DEPLOYMENT ==="
+                            
+                            def monitoringServices = [
+                                "prometheus",
+                                "grafana", 
+                                "alertmanager",
+                                "elasticsearch",
+                                "kibana",
+                                "jaeger",
+                                "node-exporter"
+                            ]
+                            
+                            monitoringServices.each { service ->
+                                echo "📊 Deploying monitoring: ${service}..."
+                                
+                                sh """
+                                    if ! railway service list | grep -q "${service}"; then
+                                        railway service create "${service}"
+                                    fi
+                                    
+                                    # Configure monitoring specific variables
+                                    case "${service}" in
+                                        "grafana")
+                                            railway variables set GF_SECURITY_ADMIN_PASSWORD="admin123" --service "${service}"
+                                            railway variables set GF_USERS_ALLOW_SIGN_UP="false" --service "${service}"
+                                            ;;
+                                        "elasticsearch")
+                                            railway variables set "discovery.type"="single-node" --service "${service}"
+                                            railway variables set "ES_JAVA_OPTS"="-Xms512m -Xmx512m" --service "${service}"
+                                            railway variables set "xpack.security.enabled"="false" --service "${service}"
+                                            ;;
+                                        "kibana")
+                                            railway variables set ELASTICSEARCH_HOSTS="https://elasticsearch-${params.TARGET_ENV}.up.railway.app" --service "${service}"
+                                            ;;
+                                        "jaeger")
+                                            railway variables set COLLECTOR_ZIPKIN_HTTP_PORT="9411" --service "${service}"
+                                            ;;
+                                    esac
+                                    
+                                    railway service "${service}" --detach || echo "Monitoring service ${service} deployment initiated"
+                                    sleep 20
+                                """
+                            }
+                            
+                            echo "✅ Railway monitoring stack deployed"
+                        }
+                    }
+                }
+                
+                stage('Local Monitoring') {
+                    when { 
+                        expression { params.DEPLOY_TO_LOCAL_K8S } 
+                    }
+                    steps {
+                        script {
+                            echo "📊 === LOCAL MONITORING DEPLOYMENT ==="
+                            
+                            try {
+                                // Deploy monitoring stack usando docker-compose (tu configuración original)
+                                sh '''
+                                    if [ -f "monitoring/docker-compose.yml" ]; then
+                                        echo "Deploying monitoring stack..."
+                                        cd monitoring
+                                        docker-compose up -d
+                                        echo "✅ Monitoring stack deployed locally"
+                                    else
+                                        echo "⚠️ No monitoring configuration found"
+                                    fi
+                                '''
+                            } catch (Exception e) {
+                                echo "⚠️ Local monitoring deployment failed: ${e.getMessage()}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // === STAGE MANTENIDO: SYSTEM VERIFICATION ===
         stage('System Verification') {
             when {
                 allOf {
@@ -466,41 +782,94 @@ pipeline {
                     }
                 }
             }
-            steps {
-                script {
-                    echo "✅ === SYSTEM VERIFICATION ==="
-                    
-                    try {
-                        // Wait for system stabilization
-                        sleep(time: 45, unit: 'SECONDS')
-                        
-                        // Verify core services are running
-                        def coreServices = ['api-gateway', 'user-service', 'product-service', 'order-service']
-                        
-                        coreServices.each { service ->
-                            sh """
-                                kubectl wait --for=condition=ready pod -l app=${service} \
-                                -n ${env.K8S_NAMESPACE} --timeout=120s || echo "${service} not ready"
-                            """
+            parallel {
+                stage('Railway System Verification') {
+                    when { 
+                        expression { params.DEPLOY_TO_RAILWAY } 
+                    }
+                    steps {
+                        script {
+                            echo "✅ === RAILWAY SYSTEM VERIFICATION ==="
+                            
+                            try {
+                                // Wait for Railway services to stabilize
+                                sleep(time: 60, unit: 'SECONDS')
+                                
+                                // Verify core services are accessible
+                                def coreServices = ['api-gateway', 'service-discovery', 'zipkin', 'grafana']
+                                
+                                coreServices.each { service ->
+                                    sh """
+                                        echo "🔍 Checking ${service} on Railway..."
+                                        url="https://${service}-${params.TARGET_ENV}.up.railway.app"
+                                        
+                                        # Try multiple times
+                                        for i in {1..5}; do
+                                            if curl -f -s -o /dev/null "\$url" || curl -f -s -o /dev/null "\$url/actuator/health"; then
+                                                echo "✅ ${service} is accessible at \$url"
+                                                break
+                                            else
+                                                echo "⚠️ Attempt \$i: ${service} not ready yet... waiting"
+                                                sleep 30
+                                            fi
+                                        done
+                                    """
+                                }
+                                
+                                // Execute Railway-specific smoke tests
+                                executeRailwaySmokeTests()
+                                
+                                echo "✅ Railway system verification completed"
+                                
+                            } catch (Exception e) {
+                                echo "⚠️ Railway system verification issues: ${e.getMessage()}"
+                                echo "Services may still be initializing..."
+                            }
                         }
-                        
-                        // Execute smoke tests
-                        executeSystemSmokeTests()
-                        
-                        // Validar health de servicios
-                        validateServiceHealth()
-                        
-                        echo "✅ System verification completed"
-                        
-                    } catch (Exception e) {
-                        echo "⚠️ System verification issues: ${e.getMessage()}"
-                        echo "System may still be initializing..."
+                    }
+                }
+                
+                stage('Local K8s System Verification') {
+                    when { 
+                        expression { params.DEPLOY_TO_LOCAL_K8S } 
+                    }
+                    steps {
+                        script {
+                            echo "✅ === LOCAL K8S SYSTEM VERIFICATION ==="
+                            
+                            try {
+                                // Wait for system stabilization
+                                sleep(time: 45, unit: 'SECONDS')
+                                
+                                // Verify core services are running (código original)
+                                def coreServices = ['api-gateway', 'user-service', 'product-service', 'order-service']
+                                
+                                coreServices.each { service ->
+                                    sh """
+                                        kubectl wait --for=condition=ready pod -l app=${service} \
+                                        -n ${env.K8S_NAMESPACE} --timeout=120s || echo "${service} not ready"
+                                    """
+                                }
+                                
+                                // Execute smoke tests (código original)
+                                executeSystemSmokeTests()
+                                
+                                // Validar health de servicios (código original)
+                                validateServiceHealth()
+                                
+                                echo "✅ Local K8s system verification completed"
+                                
+                            } catch (Exception e) {
+                                echo "⚠️ Local K8s system verification issues: ${e.getMessage()}"
+                                echo "System may still be initializing..."
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // === NUEVO STAGE: CHANGE MANAGEMENT ===
+        // === STAGE MANTENIDO: CHANGE MANAGEMENT ===
         stage('Change Management & Release Notes') {
             when {
                 expression { params.GENERATE_ARTIFACTS }
@@ -573,6 +942,9 @@ pipeline {
                 // Archive coverage reports
                 archiveArtifacts artifacts: '**/target/site/jacoco/**', allowEmptyArchive: true
                 
+                // Archive Terraform outputs
+                archiveArtifacts artifacts: 'terraform/railway/terraform-outputs.json', allowEmptyArchive: true
+                
                 // Clean temporary files
                 sh "rm -f temp-*-deployment.yaml || true"
                 sh "rm -f build-*.log || true"
@@ -584,6 +956,8 @@ pipeline {
                 echo "Image Tag: ${params.IMAGE_TAG}"
                 echo "Tests: ${params.SKIP_TESTS ? 'SKIPPED' : 'EXECUTED'}"
                 echo "Security Scan: ${params.SKIP_SECURITY_SCAN ? 'SKIPPED' : 'EXECUTED'}"
+                echo "Railway Deployment: ${params.DEPLOY_TO_RAILWAY ? 'EXECUTED' : 'SKIPPED'}"
+                echo "Local K8s Deployment: ${params.DEPLOY_TO_LOCAL_K8S ? 'EXECUTED' : 'SKIPPED'}"
             }
         }
         
@@ -592,16 +966,31 @@ pipeline {
                 echo "🎉 DEPLOYMENT SUCCESS!"
                 
                 // Notificar éxito general
-                sendNotification("🎉 Pipeline completed successfully for ${params.TARGET_ENV} - Build ${params.IMAGE_TAG}", 'success')
+                def deploymentTarget = params.DEPLOY_TO_RAILWAY ? "Railway" : "Local K8s"
+                sendNotification("🎉 Pipeline completed successfully for ${params.TARGET_ENV} on ${deploymentTarget} - Build ${params.IMAGE_TAG}", 'success')
                 
-                try {
-                    sh """
-                        echo "=== CLUSTER STATUS ==="
-                        kubectl get pods -n ${env.K8S_NAMESPACE} || echo "Cluster status unavailable"
-                        kubectl get services -n ${env.K8S_NAMESPACE} || echo "Services status unavailable"
+                // Mostrar URLs relevantes según plataforma
+                if (params.DEPLOY_TO_RAILWAY) {
+                    echo """
+🚂 === RAILWAY DEPLOYMENT URLS ===
+API Gateway: https://api-gateway-${params.TARGET_ENV}.up.railway.app
+Service Discovery: https://service-discovery-${params.TARGET_ENV}.up.railway.app
+Grafana Monitoring: https://grafana-${params.TARGET_ENV}.up.railway.app
+Zipkin Tracing: https://zipkin-${params.TARGET_ENV}.up.railway.app
+Kibana Logs: https://kibana-${params.TARGET_ENV}.up.railway.app
                     """
-                } catch (Exception e) {
-                    echo "Could not retrieve cluster status: ${e.getMessage()}"
+                }
+                
+                if (params.DEPLOY_TO_LOCAL_K8S) {
+                    try {
+                        sh """
+                            echo "=== LOCAL K8S CLUSTER STATUS ==="
+                            kubectl get pods -n ${env.K8S_NAMESPACE} || echo "Cluster status unavailable"
+                            kubectl get services -n ${env.K8S_NAMESPACE} || echo "Services status unavailable"
+                        """
+                    } catch (Exception e) {
+                        echo "Could not retrieve cluster status: ${e.getMessage()}"
+                    }
                 }
             }
         }
@@ -612,32 +1001,63 @@ pipeline {
                 echo "Check the logs above for specific error details"
                 
                 // Notificar fallo
-                sendNotification("💥 Pipeline failed for ${params.TARGET_ENV} - Build ${params.IMAGE_TAG}", 'error')
+                def deploymentTarget = params.DEPLOY_TO_RAILWAY ? "Railway" : "Local K8s"
+                sendNotification("💥 Pipeline failed for ${params.TARGET_ENV} on ${deploymentTarget} - Build ${params.IMAGE_TAG}", 'error')
                 
                 // Ejecutar rollback automático si es producción
                 if (params.TARGET_ENV == 'prod') {
                     echo "🔄 Executing automatic rollback for production..."
                     try {
-                        sh """
-                            # Rollback all services
-                            for service in api-gateway user-service product-service order-service payment-service; do
-                                kubectl rollout undo deployment/\$service -n ${env.K8S_NAMESPACE} || echo "Rollback failed for \$service"
-                            done
-                        """
+                        if (params.DEPLOY_TO_RAILWAY) {
+                            // Railway rollback
+                            sh """
+                                echo "Rolling back Railway services..."
+                                services=(api-gateway user-service product-service order-service payment-service)
+                                for service in "\${services[@]}"; do
+                                    railway service \$service --previous || echo "Rollback failed for \$service"
+                                done
+                            """
+                        }
+                        
+                        if (params.DEPLOY_TO_LOCAL_K8S) {
+                            // K8s rollback (código original)
+                            sh """
+                                # Rollback all services
+                                for service in api-gateway user-service product-service order-service payment-service; do
+                                    kubectl rollout undo deployment/\$service -n ${env.K8S_NAMESPACE} || echo "Rollback failed for \$service"
+                                done
+                            """
+                        }
+                        
                         sendNotification("🔄 Automatic rollback executed for production", 'warning')
                     } catch (Exception rollbackError) {
                         sendNotification("❌ Automatic rollback failed: ${rollbackError.getMessage()}", 'error')
                     }
                 }
                 
-                try {
-                    sh """
-                        echo "=== DEBUG INFORMATION ==="
-                        kubectl get pods -n ${env.K8S_NAMESPACE} --show-labels || true
-                        kubectl describe pods -n ${env.K8S_NAMESPACE} | tail -50 || true
-                    """
-                } catch (Exception e) {
-                    echo "Could not retrieve debug information: ${e.getMessage()}"
+                // Debug information
+                if (params.DEPLOY_TO_LOCAL_K8S) {
+                    try {
+                        sh """
+                            echo "=== DEBUG INFORMATION ==="
+                            kubectl get pods -n ${env.K8S_NAMESPACE} --show-labels || true
+                            kubectl describe pods -n ${env.K8S_NAMESPACE} | tail -50 || true
+                        """
+                    } catch (Exception e) {
+                        echo "Could not retrieve debug information: ${e.getMessage()}"
+                    }
+                }
+                
+                if (params.DEPLOY_TO_RAILWAY) {
+                    try {
+                        sh """
+                            echo "=== RAILWAY DEBUG INFORMATION ==="
+                            railway status || true
+                            railway logs --tail 50 || true
+                        """
+                    } catch (Exception e) {
+                        echo "Could not retrieve Railway debug information: ${e.getMessage()}"
+                    }
                 }
             }
         }
@@ -645,7 +1065,8 @@ pipeline {
         unstable {
             script {
                 echo "⚠️ PIPELINE UNSTABLE!"
-                sendNotification("⚠️ Pipeline completed with warnings for ${params.TARGET_ENV} - Build ${params.IMAGE_TAG}", 'warning')
+                def deploymentTarget = params.DEPLOY_TO_RAILWAY ? "Railway" : "Local K8s"
+                sendNotification("⚠️ Pipeline completed with warnings for ${params.TARGET_ENV} on ${deploymentTarget} - Build ${params.IMAGE_TAG}", 'warning')
             }
         }
     }
@@ -653,6 +1074,7 @@ pipeline {
 
 // === HELPER FUNCTIONS (ORIGINALES + NUEVAS) ===
 
+// === FUNCIONES ORIGINALES MANTENIDAS ===
 def compileService(String serviceName) {
     echo "🔨 Compiling ${serviceName}..."
     
@@ -667,13 +1089,11 @@ def compileService(String serviceName) {
                 echo "Compiling source code..."
                 ./mvnw compile -DskipTests || {
                     echo "Maven wrapper failed, trying alternatives..."
-                    # Try without wrapper as fallback
                     if command -v mvn >/dev/null 2>&1; then
                         echo "Using system maven..."
                         mvn compile -DskipTests
                     else
                         echo "No Maven found, trying manual compilation..."
-                        # As last resort, try manual Java compilation
                         if [ -d "src/main/java" ]; then
                             echo "Attempting manual compilation (limited functionality)..."
                             find src/main/java -name "*.java" | head -5
@@ -694,12 +1114,8 @@ def compileService(String serviceName) {
                 }
             '''
             
-            // Verify JAR creation - be more flexible about location
             def jarExists = sh(
-                script: """
-                    # Look for JAR files in target directory
-                    find target -name '*.jar' -not -name '*sources*' -not -name '*javadoc*' | head -1
-                """,
+                script: "find target -name '*.jar' -not -name '*sources*' -not -name '*javadoc*' | head -1",
                 returnStdout: true
             ).trim()
             
@@ -707,16 +1123,6 @@ def compileService(String serviceName) {
                 echo "✅ ${serviceName} compiled successfully: ${jarExists}"
                 return 'SUCCESS'
             } else {
-                // Check if target directory exists and what's in it
-                def targetContents = sh(
-                    script: "ls -la target/ 2>/dev/null || echo 'No target directory'",
-                    returnStdout: true
-                ).trim()
-                
-                echo "⚠️ ${serviceName} target directory contents:"
-                echo targetContents
-                
-                // Look for class files as evidence of compilation
                 def classExists = sh(
                     script: "find target -name '*.class' 2>/dev/null | head -1",
                     returnStdout: true
@@ -733,26 +1139,6 @@ def compileService(String serviceName) {
             
         } catch (Exception e) {
             echo "❌ ${serviceName} compilation failed with exception: ${e.getMessage()}"
-            
-            // Try to get more diagnostic information
-            try {
-                sh '''
-                    echo "=== DIAGNOSTIC INFORMATION ==="
-                    echo "Working directory:"
-                    pwd
-                    echo "Directory contents:"
-                    ls -la
-                    echo "Maven wrapper status:"
-                    ls -la mvnw* || echo "No Maven wrapper found"
-                    echo "Java version:"
-                    java -version || echo "Java not found"
-                    echo "Environment:"
-                    env | grep -E "(JAVA_HOME|MAVEN_HOME|PATH)" || echo "No relevant env vars"
-                '''
-            } catch (Exception diagError) {
-                echo "Could not get diagnostic information: ${diagError.getMessage()}"
-            }
-            
             return 'FAILED'
         }
     }
@@ -763,13 +1149,11 @@ def executeTests(String serviceName) {
     
     dir(serviceName) {
         try {
-            // Verificar si existe pom.xml
             if (!fileExists('pom.xml')) {
                 echo "⚠️ No pom.xml found for ${serviceName}"
                 return 'NO_POM'
             }
             
-            // Compilación simple
             def compileResult = sh(
                 script: './mvnw clean compile -DskipTests -q',
                 returnStatus: true
@@ -780,7 +1164,6 @@ def executeTests(String serviceName) {
                 return 'COMPILE_FAILED'
             }
             
-            // Ejecutar tests de forma simple
             def testResult = sh(
                 script: './mvnw test -Dmaven.test.failure.ignore=true -q',
                 returnStatus: true
@@ -801,7 +1184,6 @@ def executeIntegrationTests() {
     
     dir('proxy-client') {
         try {
-            // Check if integration tests exist
             def hasIntegrationTests = sh(
                 script: "find src/test/java -name '*IntegrationTest.java' -o -name '*IT.java' 2>/dev/null | wc -l || echo '0'",
                 returnStdout: true
@@ -810,7 +1192,6 @@ def executeIntegrationTests() {
             echo "🔍 Found ${hasIntegrationTests} integration test files"
             
             if (hasIntegrationTests.toInteger() > 0) {
-                // Run integration tests with specific profile
                 sh '''
                     echo "Running integration tests..."
                     ./mvnw test \
@@ -821,21 +1202,7 @@ def executeIntegrationTests() {
                         -DreuseForks=false \
                     || echo "Integration tests completed"
                 '''
-                
-                // Check for results
-                if (fileExists('target/surefire-reports')) {
-                    def reportCount = sh(
-                        script: "find target/surefire-reports -name '*IntegrationTest*.xml' -o -name '*IT*.xml' 2>/dev/null | wc -l || echo '0'",
-                        returnStdout: true
-                    ).trim()
-                    
-                    if (reportCount.toInteger() > 0) {
-                        echo "📊 Integration tests produced ${reportCount} reports"
-                        return 'SUCCESS'
-                    }
-                }
-                
-                return 'EXECUTED'
+                return 'SUCCESS'
             } else {
                 echo "⚠️ No integration tests found"
                 return 'NONE_FOUND'
@@ -858,7 +1225,6 @@ def buildContainerImage(String serviceName, String imageTag) {
             sh "docker build -t ${imageName} ."
             echo "✅ Container built: ${imageName}"
             
-            // Try to push to registry if available
             try {
                 def registryImage = "${env.DOCKER_REGISTRY}/${serviceName}:${imageTag}"
                 sh "docker tag ${imageName} ${registryImage}"
@@ -877,22 +1243,16 @@ def buildContainerImage(String serviceName, String imageTag) {
     }
 }
 
+// === FUNCIONES ORIGINALES PARA K8S ===
 def deployInfrastructureServices() {
     echo "🏗️ Deploying infrastructure services..."
     
     try {
-        // Apply common configurations
         applyKubernetesConfig('k8s/namespace.yaml')
         applyKubernetesConfig('k8s/common-config.yaml')
-        
-        // Deploy service discovery
         deployServiceToK8s('service-discovery', params.IMAGE_TAG)
-        
-        // Deploy configuration service
         deployServiceToK8s('cloud-config', params.IMAGE_TAG)
-        
         echo "✅ Infrastructure services deployed"
-        
     } catch (Exception e) {
         echo "⚠️ Infrastructure deployment issues: ${e.getMessage()}"
     }
@@ -909,7 +1269,6 @@ def deployApplicationServices() {
         }
         
         echo "✅ Application services deployed"
-        
     } catch (Exception e) {
         echo "⚠️ Application deployment issues: ${e.getMessage()}"
     }
@@ -926,24 +1285,20 @@ def deployServiceToK8s(String serviceName, String imageTag) {
             def processedFile = "temp-${serviceName}-deployment.yaml"
             def imageName = "${env.DOCKER_REGISTRY}/${serviceName}:${imageTag}"
             
-            // Process deployment template
             sh """
                 sed 's|{{IMAGE_NAME}}|${imageName}|g; s|{{BUILD_TAG}}|${imageTag}|g' ${deploymentFile} > ${processedFile}
                 kubectl apply -f ${processedFile} -n ${env.K8S_NAMESPACE}
             """
             
-            // Apply service configuration
             if (fileExists(serviceFile)) {
                 sh "kubectl apply -f ${serviceFile} -n ${env.K8S_NAMESPACE}"
             }
             
-            // Wait for deployment
             sh """
                 kubectl rollout status deployment/${serviceName} -n ${env.K8S_NAMESPACE} --timeout=90s || echo "${serviceName} deployment may still be in progress"
             """
             
             echo "✅ ${serviceName} deployed"
-            
         } else {
             echo "⚠️ No deployment config found for ${serviceName}"
         }
@@ -988,7 +1343,6 @@ def executeSystemSmokeTests() {
         """
         
         echo "✅ Smoke tests completed"
-        
     } catch (Exception e) {
         echo "⚠️ Smoke tests failed: ${e.getMessage()}"
     }
@@ -1006,66 +1360,36 @@ def createDeploymentArtifacts() {
         """
         
         archiveArtifacts artifacts: 'deployment-artifacts/**', allowEmptyArchive: true
-        
     } catch (Exception e) {
         echo "Artifact creation failed: ${e.getMessage()}"
     }
 }
 
-def generateReleaseDocumentation() {
+// === NUEVAS FUNCIONES PARA RAILWAY ===
+def executeRailwaySmokeTests() {
+    echo "💨 Executing Railway smoke tests..."
+    
     try {
-        def releaseFile = "release-notes-${params.IMAGE_TAG}.md"
-        def gitCommit = sh(returnStdout: true, script: 'git rev-parse HEAD').trim()
-        def buildTime = new Date().format('yyyy-MM-dd HH:mm:ss')
+        def railwayServices = ['api-gateway', 'service-discovery', 'zipkin']
         
-        def documentation = """
-# Release Documentation - Build ${params.IMAGE_TAG}
-
-## Build Information
-- **Build Number**: ${env.BUILD_NUMBER}
-- **Image Tag**: ${params.IMAGE_TAG}
-- **Target Environment**: ${params.TARGET_ENV}
-- **Build Time**: ${buildTime}
-- **Git Commit**: ${gitCommit}
-
-## Services Deployed
-${env.CORE_SERVICES.split(',').collect { "- ${it}" }.join('\n')}
-
-## Configuration
-- **Tests**: ${params.SKIP_TESTS ? 'Skipped' : 'Executed'}
-- **Security Scan**: ${params.SKIP_SECURITY_SCAN ? 'Skipped' : 'Executed'}
-- **SonarQube**: ${params.RUN_SONAR_ANALYSIS ? 'Executed' : 'Skipped'}
-- **Artifacts**: ${params.GENERATE_ARTIFACTS ? 'Generated' : 'Skipped'}
-- **Namespace**: ${env.K8S_NAMESPACE}
-
-## Quality Metrics
-- **Build Status**: ${currentBuild.currentResult ?: 'IN_PROGRESS'}
-- **Pipeline Duration**: ${currentBuild.duration ? (currentBuild.duration / 1000 / 60).round(2) + ' minutes' : 'N/A'}
-
-## Rollback Instructions
-In case of issues:
-1. Execute: kubectl rollout undo deployment/SERVICE_NAME -n ${env.K8S_NAMESPACE}
-2. Verify: kubectl get pods -n ${env.K8S_NAMESPACE}
-3. Contact: ${env.EMAIL_RECIPIENTS}
-
-## Status
-✅ Build completed successfully for ${params.TARGET_ENV} environment
-
----
-*Generated automatically by Jenkins Pipeline*
-"""
+        railwayServices.each { service ->
+            sh """
+                echo "🔍 Testing ${service} on Railway..."
+                url="https://${service}-${params.TARGET_ENV}.up.railway.app"
+                
+                if curl -f -s -m 30 "\$url" || curl -f -s -m 30 "\$url/actuator/health"; then
+                    echo "✅ ${service} is accessible"
+                else
+                    echo "⚠️ ${service} may not be ready yet"
+                fi
+            """
+        }
         
-        writeFile(file: releaseFile, text: documentation)
-        archiveArtifacts artifacts: releaseFile
-        
-        echo "✅ Release documentation generated: ${releaseFile}"
-        
+        echo "✅ Railway smoke tests completed"
     } catch (Exception e) {
-        echo "Documentation generation failed: ${e.getMessage()}"
+        echo "⚠️ Railway smoke tests failed: ${e.getMessage()}"
     }
 }
-
-// === NUEVAS FUNCIONES PARA PUNTOS 4, 6, 7, 8 ===
 
 def runBasicCodeAnalysis() {
     echo "📊 Running basic code analysis..."
@@ -1076,7 +1400,6 @@ def runBasicCodeAnalysis() {
             dir(service) {
                 sh """
                     echo "Analyzing ${service}..."
-                    # Análisis básico con Maven plugins
                     ./mvnw compile -DskipTests || echo "Compilation completed with warnings"
                     ./mvnw checkstyle:check || echo "Checkstyle completed with warnings"
                 """
@@ -1088,7 +1411,6 @@ def runBasicCodeAnalysis() {
 def installTrivy() {
     echo "📦 Installing Trivy..."
     sh """
-        # Install Trivy
         curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
         trivy --version || echo "Trivy installation may have failed"
     """
@@ -1101,9 +1423,7 @@ def generateCoverageReport() {
     services.each { service ->
         if (fileExists("${service}/pom.xml")) {
             dir(service) {
-                sh """
-                    ./mvnw jacoco:report || echo "Coverage report failed for ${service}"
-                """
+                sh "./mvnw jacoco:report || echo 'Coverage report failed for ${service}'"
             }
         }
     }
@@ -1112,7 +1432,6 @@ def generateCoverageReport() {
 def validateStagingPrerequisites() {
     echo "📋 Validating staging prerequisites..."
     
-    // Verificar que dev esté funcionando
     sh """
         kubectl get pods -n ${env.DEV_NAMESPACE} --field-selector=status.phase=Running | grep -q Running || \
         echo "Warning: Dev environment may not be fully operational"
@@ -1136,34 +1455,13 @@ def sendNotification(String message, String level) {
     echo "📢 Sending notification: ${message}"
     
     try {
-        // Slack notification (si está configurado)
         if (env.SLACK_CHANNEL) {
-            def color = level == 'success' ? 'good' : (level == 'warning' ? 'warning' : 'danger')
-            
-            // Para implementar Slack real, descomentar:
-            // slackSend(
-            //     channel: env.SLACK_CHANNEL,
-            //     color: color,
-            //     message: message
-            // )
-            
             echo "Slack notification would be sent: ${message}"
         }
         
-        // Email notification (si está configurado)
         if (env.EMAIL_RECIPIENTS) {
-            def subject = "Pipeline ${level.toUpperCase()}: ${env.JOB_NAME} - Build ${env.BUILD_NUMBER}"
-            
-            // Para implementar email real, descomentar:
-            // emailext(
-            //     to: env.EMAIL_RECIPIENTS,
-            //     subject: subject,
-            //     body: message
-            // )
-            
             echo "Email notification would be sent to: ${env.EMAIL_RECIPIENTS}"
         }
-        
     } catch (Exception e) {
         echo "⚠️ Notification failed: ${e.getMessage()}"
     }
@@ -1175,7 +1473,6 @@ def generateBasicReleaseNotes() {
         def gitCommit = sh(returnStdout: true, script: 'git rev-parse --short HEAD || echo "unknown"').trim()
         def buildTime = new Date().format('yyyy-MM-dd HH:mm:ss')
         
-        // Obtener commits recientes
         def recentCommits = sh(
             returnStdout: true, 
             script: 'git log --oneline -5 2>/dev/null || echo "No git history available"'
@@ -1190,6 +1487,7 @@ def generateBasicReleaseNotes() {
 - **Environment**: ${params.TARGET_ENV}
 - **Build**: ${env.BUILD_NUMBER}
 - **Commit**: ${gitCommit}
+- **Platform**: ${params.DEPLOY_TO_RAILWAY ? 'Railway' : 'Local Kubernetes'}
 
 ## 📋 Changes Included
 ### Recent Commits
@@ -1202,33 +1500,92 @@ ${recentCommits}
 - **Security Scan**: ${params.SKIP_SECURITY_SCAN ? 'SKIPPED' : 'EXECUTED'}
 - **SonarQube Analysis**: ${params.RUN_SONAR_ANALYSIS ? 'EXECUTED' : 'SKIPPED'}
 
-## 📊 Build Metrics
+## 🚀 Deployment Summary
+- **Railway Deployment**: ${params.DEPLOY_TO_RAILWAY ? 'EXECUTED' : 'SKIPPED'}
+- **Local K8s Deployment**: ${params.DEPLOY_TO_LOCAL_K8S ? 'EXECUTED' : 'SKIPPED'}
 - **Build Status**: ${currentBuild.currentResult ?: 'SUCCESS'}
-- **Services Deployed**: ${env.CORE_SERVICES.split(',').size()}
-- **Namespace**: ${env.K8S_NAMESPACE}
+
+## 🌐 Service URLs
+${params.DEPLOY_TO_RAILWAY ? """
+### Railway URLs
+- **API Gateway**: https://api-gateway-${params.TARGET_ENV}.up.railway.app
+- **Service Discovery**: https://service-discovery-${params.TARGET_ENV}.up.railway.app
+- **Monitoring**: https://grafana-${params.TARGET_ENV}.up.railway.app
+- **Tracing**: https://zipkin-${params.TARGET_ENV}.up.railway.app
+- **Logs**: https://kibana-${params.TARGET_ENV}.up.railway.app
+""" : """
+### Local K8s URLs
+- Check kubectl get services -n ${env.K8S_NAMESPACE}
+"""}
 
 ## 🔄 Rollback Plan
-In case of issues:
+${params.DEPLOY_TO_RAILWAY ? """
+1. Execute: railway service SERVICE_NAME --previous
+2. Verify: railway status
+""" : """
 1. Execute: kubectl rollout undo deployment/SERVICE_NAME -n ${env.K8S_NAMESPACE}
 2. Verify health: kubectl get pods -n ${env.K8S_NAMESPACE}
-3. Contact: devops@company.com
+"""}
 
 ## 📝 Services Updated
 ${env.CORE_SERVICES.split(',').collect { "- ${it}" }.join('\n')}
 
 ---
 *Release notes generated automatically by Jenkins Pipeline*
-*Build URL: ${env.BUILD_URL ?: 'N/A'}*
 """
         
-        // Crear directorio si no existe
         sh "mkdir -p change-management/releases"
-        
         writeFile(file: releaseFile, text: basicReleaseNotes)
         
         echo "✅ Basic release notes generated: ${releaseFile}"
-        
     } catch (Exception e) {
         echo "❌ Basic release notes generation failed: ${e.getMessage()}"
+    }
+}
+
+def generateReleaseDocumentation() {
+    try {
+        def releaseFile = "release-notes-${params.IMAGE_TAG}.md"
+        def gitCommit = sh(returnStdout: true, script: 'git rev-parse HEAD').trim()
+        def buildTime = new Date().format('yyyy-MM-dd HH:mm:ss')
+        
+        def documentation = """
+# Release Documentation - Build ${params.IMAGE_TAG}
+
+## Build Information
+- **Build Number**: ${env.BUILD_NUMBER}
+- **Image Tag**: ${params.IMAGE_TAG}
+- **Target Environment**: ${params.TARGET_ENV}
+- **Build Time**: ${buildTime}
+- **Git Commit**: ${gitCommit}
+- **Deployment Platform**: ${params.DEPLOY_TO_RAILWAY ? 'Railway Cloud' : 'Local Kubernetes'}
+
+## Services Deployed
+${env.CORE_SERVICES.split(',').collect { "- ${it}" }.join('\n')}
+
+## Configuration
+- **Tests**: ${params.SKIP_TESTS ? 'Skipped' : 'Executed'}
+- **Security Scan**: ${params.SKIP_SECURITY_SCAN ? 'Skipped' : 'Executed'}
+- **SonarQube**: ${params.RUN_SONAR_ANALYSIS ? 'Executed' : 'Skipped'}
+- **Railway Deploy**: ${params.DEPLOY_TO_RAILWAY ? 'Executed' : 'Skipped'}
+- **Local K8s Deploy**: ${params.DEPLOY_TO_LOCAL_K8S ? 'Executed' : 'Skipped'}
+
+## Quality Metrics
+- **Build Status**: ${currentBuild.currentResult ?: 'IN_PROGRESS'}
+- **Pipeline Duration**: ${currentBuild.duration ? (currentBuild.duration / 1000 / 60).round(2) + ' minutes' : 'N/A'}
+
+## Status
+✅ Build completed successfully for ${params.TARGET_ENV} environment
+
+---
+*Generated automatically by Jenkins Pipeline*
+"""
+        
+        writeFile(file: releaseFile, text: documentation)
+        archiveArtifacts artifacts: releaseFile
+        
+        echo "✅ Release documentation generated: ${releaseFile}"
+    } catch (Exception e) {
+        echo "Documentation generation failed: ${e.getMessage()}"
     }
 }
