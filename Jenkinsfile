@@ -343,7 +343,7 @@ pipeline {
                                 }
                             }
                             
-                            // Apply Terraform
+                            // Apply Terraformm
                             sh '''
                                 echo "🚀 Applying Railway infrastructure..."
                                 terraform apply -auto-approve tfplan
