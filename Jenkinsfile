@@ -343,7 +343,7 @@ pipeline {
                                 }
                             }
                             
-                            // Apply Terraformm
+                            // Apply Terraform
                             sh '''
                                 echo "🚀 Applying Railway infrastructure..."
                                 terraform apply -auto-approve tfplan
@@ -354,7 +354,7 @@ pipeline {
                             
                             archiveArtifacts artifacts: 'terraform-outputs.json', allowEmptyArchive: true
                             
-                            echo "✅ Railway infrastructure provisioned successfully"
+                            echo "✅ Railway Infrastructure provisioned successfully"
                             
                         } catch (Exception e) {
                             echo "❌ Railway infrastructure provisioning failed: ${e.getMessage()}"
