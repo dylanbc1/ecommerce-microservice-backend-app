@@ -132,8 +132,8 @@ pipeline {
                             echo "Installing Railway CLI locally..."
                             npm install @railway/cli
 
-                            echo "Logging into Railway..."
-                            npx railway login --browserless
+                            echo "Authenticating to Railway using token..."
+                            npx railway login --token ${RAILWAY_TOKEN}
 
                             echo "Authenticated as:"
                             npx railway whoami
