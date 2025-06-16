@@ -149,7 +149,7 @@ EOF
   depends_on = [null_resource.verify_railway_access]
 }
 
-# Output con información útil
+# Output con información utilll
 output "deployment_status" {
   description = "Deployment status"
   value = {
