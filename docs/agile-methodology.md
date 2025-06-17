@@ -56,7 +56,6 @@
 ### Velocity
 - **Sprint 1**: 8 Story Points completados
 - **Sprint 2**: 12 Story Points completados
-- **Sprint 3**: 15 Story Points completados
 - **Tendencia**: Velocidad creciente por experiencia adquirida
 
 ### Burndown Chart
