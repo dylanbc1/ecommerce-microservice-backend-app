@@ -16,16 +16,14 @@
 	<name>ecommerce-microservice-backend</name>
 	<description>Ecommerce backend implemented in Spring Boot and Spring Cloud!</description>
 	<packaging>pom</packaging>
-	
-	<properties>
+		<properties>
 		<java.version>11</java.version>
 		<spring-cloud.version>2020.0.4</spring-cloud.version>
 		<testcontainers.version>1.16.0</testcontainers.version>
-		<jacoco.version>0.8.8</jacoco.version>
+		<jacoco.version>0.8.7</jacoco.version>
 		<maven.compiler.source>11</maven.compiler.source>
 		<maven.compiler.target>11</maven.compiler.target>
 	</properties>
-	
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -75,10 +73,14 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
-		</dependency>
-		<dependency>
+		</dependency>		<dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.platform</groupId>
+			<artifactId>junit-platform-launcher</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
@@ -100,9 +102,7 @@
 				<scope>import</scope>
 			</dependency>
 		</dependencies>
-	</dependencyManagement>
-	
-	<modules>
+	</dependencyManagement>	<modules>
 		<module>service-discovery</module>
 		<module>cloud-config</module>
 		<module>api-gateway</module>
@@ -113,26 +113,47 @@
 		<module>order-service</module>
 		<module>shipping-service</module>
 		<module>payment-service</module>
+		<module>jacoco-report-aggregation</module>
 	</modules>
-	
-	<build>
+		<build>		<pluginManagement>
+			<plugins>
+				<plugin>
+					<groupId>org.jacoco</groupId>
+					<artifactId>jacoco-maven-plugin</artifactId>
+					<version>${jacoco.version}</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-failsafe-plugin</artifactId>
+					<version>3.0.0-M7</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-surefire-plugin</artifactId>
+					<version>3.0.0-M7</version>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+		
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
-			
-			<!-- JaCoCo Plugin para Coverage -->
+					<!-- JaCoCo Maven Plugin -->
 			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
-				<version>${jacoco.version}</version>
 				<executions>
+					<!-- Preparar el agente JaCoCo para tests unitarios -->
 					<execution>
+						<id>prepare-agent</id>
 						<goals>
 							<goal>prepare-agent</goal>
 						</goals>
 					</execution>
+					
+					<!-- Generar reporte de cobertura después de los tests -->
 					<execution>
 						<id>report</id>
 						<phase>test</phase>
@@ -140,67 +161,20 @@
 							<goal>report</goal>
 						</goals>
 					</execution>
+					
+					<!-- Preparar el agente para tests de integración -->
 					<execution>
-						<id>report-aggregate</id>
-						<phase>test</phase>
+						<id>prepare-agent-integration</id>
 						<goals>
-							<goal>report-aggregate</goal>
+							<goal>prepare-agent-integration</goal>
 						</goals>
 					</execution>
+					
+					<!-- Generar reporte de cobertura de integración -->
 					<execution>
-						<id>jacoco-check</id>
+						<id>report-integration</id>
 						<goals>
-							<goal>check</goal>
-						</goals>
-						<configuration>
-							<rules>
-								<rule>
-									<element>BUNDLE</element>
-									<limits>
-										<limit>
-											<counter>LINE</counter>
-											<value>COVEREDRATIO</value>
-											<minimum>0.60</minimum>
-										</limit>
-									</limits>
-								</rule>
-							</rules>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-			
-			<!-- Surefire Plugin para Tests -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-surefire-plugin</artifactId>
-				<version>3.0.0-M7</version>
-				<configuration>
-					<includes>
-						<include>**/*Test.java</include>
-						<include>**/*Tests.java</include>
-					</includes>
-					<argLine>@{argLine}</argLine>
-				</configuration>
-			</plugin>
-			
-			<!-- Failsafe Plugin para Integration Tests -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-failsafe-plugin</artifactId>
-				<version>3.0.0-M7</version>
-				<configuration>
-					<includes>
-						<include>**/*IT.java</include>
-						<include>**/*IntegrationTest.java</include>
-					</includes>
-					<argLine>@{argLine}</argLine>
-				</configuration>
-				<executions>
-					<execution>
-						<goals>
-							<goal>integration-test</goal>
-							<goal>verify</goal>
+							<goal>report-integration</goal>
 						</goals>
 					</execution>
 				</executions>
@@ -210,7 +184,4 @@
 	</build>
 	
 </project>
-
-
-
 

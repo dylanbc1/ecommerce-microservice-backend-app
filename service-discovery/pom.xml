@@ -24,7 +24,6 @@
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
 		</dependency>
-		
 	</dependencies>
 	
 	<dependencyManagement>
@@ -38,19 +37,65 @@
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
-	
-	<build>
+		<build>
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			
+			<!-- JaCoCo Maven Plugin para este módulo -->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<configuration>
+					<excludes>
+						<!-- Excluir clases generadas automáticamente -->
+						<exclude>**/*Application.*</exclude>
+						<exclude>**/config/**</exclude>
+						<exclude>**/dto/**</exclude>
+						<exclude>**/entity/**</exclude>
+						<exclude>**/exception/**</exclude>
+					</excludes>
+				</configuration>
+			</plugin>
+			
+			<!-- Surefire Plugin para tests unitarios -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<includes>
+						<include>**/*Test.java</include>
+						<include>**/*Tests.java</include>
+					</includes>
+				</configuration>
+			</plugin>
+			
+			<!-- Failsafe Plugin para tests de integración -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<configuration>
+					<includes>
+						<include>**/*IT.java</include>
+						<include>**/*IntegrationTest.java</include>
+					</includes>
+				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 		</plugins>
-		<finalName>service-discovery</finalName>
+		<finalName>${project.artifactId}-v${project.version}</finalName>
 	</build>
 	
 </project>
-
 
 
 

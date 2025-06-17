@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    
+    <parent>
+        <groupId>com.selimhorri</groupId>
+        <artifactId>ecommerce-microservice-backend</artifactId>
+        <version>0.1.0</version>
+    </parent>
+    
+    <artifactId>jacoco-report-aggregation</artifactId>
+    <name>JaCoCo Report Aggregation</name>
+    <description>Module for aggregating JaCoCo coverage reports from all services</description>
+    <packaging>pom</packaging>
+    
+    <dependencies>
+        <!-- Dependencies on all modules to aggregate their coverage -->
+        <dependency>
+            <groupId>com.selimhorri</groupId>
+            <artifactId>service-discovery</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.selimhorri</groupId>
+            <artifactId>cloud-config</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.selimhorri</groupId>
+            <artifactId>api-gateway</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.selimhorri</groupId>
+            <artifactId>proxy-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.selimhorri</groupId>
+            <artifactId>user-service</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.selimhorri</groupId>
+            <artifactId>product-service</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.selimhorri</groupId>
+            <artifactId>favourite-service</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.selimhorri</groupId>
+            <artifactId>order-service</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.selimhorri</groupId>
+            <artifactId>shipping-service</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.selimhorri</groupId>
+            <artifactId>payment-service</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+    
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>report-aggregate</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report-aggregate</goal>
+                        </goals>
+                        <configuration>
+                            <title>Ecommerce Microservices Coverage Report</title>
+                            <outputDirectory>${project.reporting.outputDirectory}/jacoco-aggregate</outputDirectory>
+                            <excludes>
+                                <exclude>**/*Application.*</exclude>
+                                <exclude>**/config/**</exclude>
+                                <exclude>**/dto/**</exclude>
+                                <exclude>**/entity/**</exclude>
+                                <exclude>**/exception/**</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+    
+</project>
