@@ -75,79 +75,63 @@ pipeline {
 
     stages {
         stage('Environment Setup & GCP Authentication') {
-            steps {
-                script {
-                    echo "🚀 === ENVIRONMENT SETUP & GCP AUTHENTICATION ==="
-                    echo "Branch: ${env.BRANCH_NAME}"
-                    echo "Target Environment: ${env.TARGET_ENV}"
-                    echo "Build: ${env.BUILD_NUMBER}"
-                    
-                    // Checkout source code
-                    checkout scm
-                    
-                    // Setup GCP Service Account
-                    writeFile file: 'gcp-service-account.json', text: '''
-{
-  "type": "service_account",
-  "project_id": "proyectofinal-462603",
-  "private_key_id": "ced50f1267f34bf6814f434894ceaff96ab5e955",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQCz2PiXbqj+96Fy\ny48rZB7OZIVcyo4OXHRnRezP9gSqAa/iUUKHCbbHeGE6TC8tAAag0BIsgTX92kEp\n9m/vRYBVLOynH+x7hGpn1rfY6dt60zPRFyzSr+WNcnOjZMQYl/Jr8U4VGGYdVutZ\naOAOOasjpSYGDrEPKuP6Jv8Si0ExpPos6RT3PnKAKWqwXygBdPhbA/x9WVVHRpKb\nUFYXE0JA2owZCNn76tS/BLGUSOXqv+TtbwmbuVVq2PM50Uczs5SCDvw+2Je0z+CG\niRjkEjBaeq2CeV/M4UK1P8BubCo6YC5V1hKHrR8YEUARDbPJAFC6EgI5AwNStFkE\nYtpOweNXAgMBAAECggEAKvG3QmmhHujAe2nR8PmCRaRJGAQh8ZnwDazrxCipqnKm\nrfLbYOVX6L987++7IBKugn3MqSXdX5VbFAsNZWQCJdSJWcrMrB3NTqg91CTbTLPb\n3qSbBmAL/z+CD1UDYh/+Ofovu+fMklrr7biWL69jhyprLu0ZKFcEgvoG1EW+Nn0Y\nd1azWYG9pUOzAHwhJ9h1NlcXcIj1lwuhrX11XcPuL5gu+JOvdRVab4dqw7yGntqu\npEtA7wwVpttifyTZVp8DjggarIw4ft/4+Pheb0HBVmzxASC2ejhGc5Uf/AoX+Xz9\nBQzq1qM5SfeYMzlqtYgkWIMVdJ7OjIwDCiYtGMctyQKBgQDrq4Dm+joKgb+Nr+u2\nEDVlQgu5DeIhF46Q4qSVRlkrG/+vGGCZX6GZnKKPf4vbDXTcPXBDukjrQTmgelqn\nUeomNlSwheFH5zZCbZpoO2gsGOe84ZTw11pAiZEo5E39Q39sPQwAoHs8HFOuSp7U\nYOr6UvCNtzQRUZudYjB+e7jsmwKBgQDDXLHl16K9w2bEYO714IkwRuJYnCKcLf9a\nMCuVcb4RADR7+2UyYc5iO+OkOs0Au2ivOKBQKEGiHGMups4OCPG4SUeLCXx0tQmp\nd74pvKr9CfcySrfpOfXpIKWNdbNieygKtpaKksxlvJjfrdXrFnBLexTb+1WLGedi\njpACW8IJ9QKBgQCK5RRejUFh6eBcgD86mUju+cLw+Na6TCjxCTKY69InzyOdLY/Z\nNPyIDUHdsv1ZSBAEsY0VzZemV1XAV/xPur52cPTu6KjCeOmIsxIatlCKFM+XiZf/\nbdy6Rpmv8QZp6rsRrtUBFZQr9EH5ae88GjbC+9jcnQnp3yAI3NLZ6M8vWwKBgQCW\n/N41MFqD5TBY2D33ZClDWZV4PHv3TwmKz63vm2/1Pb5SkDJfJP5YJ8dBV3y3cyBu\nRAqKyQIo4124YYzhhgIjlucnSxaYMI8eHgCnyzwvwvL9OIg5ReWL3wJ0eSJCG8MP\nvJxOzzQP8RoJzhWF0trJS4AMoIw1rLiLEHm2iOpHvQKBgQChmnp30DeO7oxzBXVY\nnetSYoQsU6hW9lWfavqjk5jF75Gg3oKihIplda7AbRCoT7k0OeebYObPR/teB+H6\nXxyBIz0qMxbO8Uok0yZxVNyRBbnbIrzUl4f2bf9/yltIraVyASAfB2mDc3wYJpKV\nis+Rs397kT1NKWj1dr/sJKhT1w==\n-----END PRIVATE KEY-----\n",
-  "client_email": "682412662542-compute@developer.gserviceaccount.com",
-  "client_id": "109054012132593449216",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/682412662542-compute%40developer.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-}
-                    '''
-                    
-                    // Authenticate with GCP
-                    sh '''
-                      bash -c '
-                          set -e
+          steps {
+              script {
+                  echo "🚀 === ENVIRONMENT SETUP & GCP AUTHENTICATION ==="
+                  echo "Branch: ${env.BRANCH_NAME}"
+                  echo "Target Environment: ${env.TARGET_ENV}"
+                  echo "Build: ${env.BUILD_NUMBER}"
 
-                          echo "✅ Cleaning up previous installation if exists"
-                          rm -rf $HOME/google-cloud-sdk
+                  // Checkout source code
+                  checkout scm
+              }
 
-                          echo "📦 Downloading Google Cloud SDK..."
-                          curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-473.0.0-linux-x86_64.tar.gz
-                          tar -xzf google-cloud-sdk-473.0.0-linux-x86_64.tar.gz
+              // GCP Service Account Authentication
+              withCredentials([file(credentialsId: 'gcp-service-account-json', variable: 'GCP_KEY')]) {
+                  sh '''
+                    bash -c '
+                        set -e
 
-                          ./google-cloud-sdk/install.sh -q
+                        echo "✅ Cleaning up previous installation if exists"
+                        rm -rf $HOME/google-cloud-sdk
 
-                          echo "✅ Adding Google Cloud SDK to PATH"
-                          . ./google-cloud-sdk/path.bash.inc
+                        echo "📦 Downloading Google Cloud SDK..."
+                        curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-473.0.0-linux-x86_64.tar.gz
+                        tar -xzf google-cloud-sdk-473.0.0-linux-x86_64.tar.gz
 
-                          echo "🔐 Authenticating with GCP"
-                          gcloud auth activate-service-account --key-file=gcp-service-account.json
-                          gcloud config set project ${GCP_PROJECT_ID}
+                        ./google-cloud-sdk/install.sh -q
 
-                          echo "🔗 Getting cluster credentials"
-                          gcloud container clusters get-credentials ${GCP_CLUSTER_NAME} --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
+                        echo "✅ Adding Google Cloud SDK to PATH"
+                        . ./google-cloud-sdk/path.bash.inc
 
-                          echo "📋 Verifying connection"
-                          gcloud --version
-                          kubectl cluster-info || echo "Cluster info retrieval failed"
-                          kubectl get nodes || echo "Node list retrieval failed"
-                      '
+                        echo "🔐 Authenticating with GCP"
+                        gcloud auth activate-service-account --key-file=$GCP_KEY
+                        gcloud config set project ${GCP_PROJECT_ID}
+
+                        echo "🔗 Getting cluster credentials"
+                        gcloud container clusters get-credentials ${GCP_CLUSTER_NAME} --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
+
+                        echo "📋 Verifying connection"
+                        gcloud --version
+                        kubectl cluster-info || echo "Cluster info retrieval failed"
+                        kubectl get nodes || echo "Node list retrieval failed"
+                    '
                   '''
+              }
 
-                    // Validate microservices exist in repo
-                    def services = env.MICROSERVICES.split(',')
-                    services.each { service ->
-                        if (fileExists("${service}")) {
-                            echo "✅ ${service} directory found"
-                        } else {
-                            echo "⚠️ ${service} directory not found - will be skipped"
-                        }
-                    }
-
-                    echo "✅ Environment setup completed"
-
-                }
-            }
-        }
+              script {
+                  // Validate microservices exist in repo
+                  def services = env.MICROSERVICES.split(',')
+                  services.each { service ->
+                      if (fileExists("${service}")) {
+                          echo "✅ ${service} directory found"
+                      } else {
+                          echo "⚠️ ${service} directory not found - will be skipped"
+                      }
+                  }
+              }
+          }
+      }
 
         stage('Infrastructure & Monitoring Verification') {
             steps {
