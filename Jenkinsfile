@@ -92,14 +92,15 @@ pipeline {
                     bash -c '
                         set -e
 
-                        echo "✅ Cleaning up previous installation if exists"
-                        rm -rf $HOME/google-cloud-sdk
-
-                        echo "📦 Downloading Google Cloud SDK..."
-                        curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-473.0.0-linux-x86_64.tar.gz
-                        tar -xzf google-cloud-sdk-473.0.0-linux-x86_64.tar.gz
-
-                        ./google-cloud-sdk/install.sh -q
+                        echo "📂 Checking for existing Google Cloud SDK installation..."
+                        if [ -d "$HOME/google-cloud-sdk" ]; then
+                            echo "✅ Google Cloud SDK already installed. Skipping download."
+                        else
+                            echo "📦 Downloading Google Cloud SDK..."
+                            curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-473.0.0-linux-x86_64.tar.gz
+                            tar -xzf google-cloud-sdk-473.0.0-linux-x86_64.tar.gz
+                            ./google-cloud-sdk/install.sh -q
+                        fi
 
                         echo "✅ Adding Google Cloud SDK to PATH"
                         . ./google-cloud-sdk/path.bash.inc
