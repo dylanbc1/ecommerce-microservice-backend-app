@@ -104,36 +104,34 @@ pipeline {
                     
                     // Authenticate with GCP
                     sh '''
-                        # Install gcloud if not present
-                        if ! command -v gcloud &> /dev/null; then
-                            echo "Installing Google Cloud SDK..."
+                      bash -c '
+                          set -e
 
-                            # Clean previous installation if exists
-                            rm -rf $HOME/google-cloud-sdk
+                          echo "✅ Cleaning up previous installation if exists"
+                          rm -rf $HOME/google-cloud-sdk
 
-                            curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-473.0.0-linux-x86_64.tar.gz
-                            tar -xzf google-cloud-sdk-473.0.0-linux-x86_64.tar.gz
-                            ./google-cloud-sdk/install.sh -q
+                          echo "📦 Downloading Google Cloud SDK..."
+                          curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-473.0.0-linux-x86_64.tar.gz
+                          tar -xzf google-cloud-sdk-473.0.0-linux-x86_64.tar.gz
 
-                            source $HOME/google-cloud-sdk/path.bash.inc
-                        else
-                            echo "✅ Google Cloud SDK already installed"
-                        fi
+                          ./google-cloud-sdk/install.sh -q
 
-                        # Ensure gcloud is in PATH
-                        export PATH="$HOME/google-cloud-sdk/bin:$PATH"
+                          echo "✅ Adding Google Cloud SDK to PATH"
+                          . ./google-cloud-sdk/path.bash.inc
 
-                        # Authenticate with service account
-                        gcloud auth activate-service-account --key-file=gcp-service-account.json
-                        gcloud config set project ${GCP_PROJECT_ID}
+                          echo "🔐 Authenticating with GCP"
+                          gcloud auth activate-service-account --key-file=gcp-service-account.json
+                          gcloud config set project ${GCP_PROJECT_ID}
 
-                        # Get cluster credentials
-                        gcloud container clusters get-credentials ${GCP_CLUSTER_NAME} --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
+                          echo "🔗 Getting cluster credentials"
+                          gcloud container clusters get-credentials ${GCP_CLUSTER_NAME} --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
 
-                        # Verify connection
-                        kubectl cluster-info || echo "Cluster info retrieval failed"
-                        kubectl get nodes || echo "Node list retrieval failed"
-                    '''
+                          echo "📋 Verifying connection"
+                          gcloud --version
+                          kubectl cluster-info || echo "Cluster info retrieval failed"
+                          kubectl get nodes || echo "Node list retrieval failed"
+                      '
+                  '''
 
                     // Validate microservices exist in repo
                     def services = env.MICROSERVICES.split(',')
