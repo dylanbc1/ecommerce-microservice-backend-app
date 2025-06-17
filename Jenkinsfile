@@ -974,7 +974,7 @@ def sendNotification(String message, String level) {
         // For Slack integration:
         // slackSend(channel: env.SLACK_CHANNEL, color: color, message: message)
         
-        // For email integration:
+        // For email :
         // emailext(to: env.EMAIL_RECIPIENTS, subject: "Pipeline ${level.toUpperCase()}", body: message)
         
     } catch (Exception e) {
