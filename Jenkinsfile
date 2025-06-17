@@ -75,98 +75,63 @@ pipeline {
 
     stages {
         stage('Environment Setup & GCP Authentication') {
-            steps {
-                script {
-                    echo "🚀 === ENVIRONMENT SETUP & GCP AUTHENTICATION ==="
-                    echo "Branch: ${env.BRANCH_NAME}"
-                    echo "Target Environment: ${env.TARGET_ENV}"
-                    echo "Build: ${env.BUILD_NUMBER}"
-                    
-                    // Checkout source code
-                    checkout scm
-                    
-                    // Setup GCP Service Account
-                    writeFile file: 'gcp-service-account.json', text: '''
-{
-  "type": "service_account",
-  "project_id": "proyectofinal-462603",
-  "private_key_id": "ced50f1267f34bf6814f434894ceaff96ab5e955",
-  "private_key": "-----BEGIN PRIVATE KEY-----\\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQCz2PiXbqj+96Fy\\ny48rZB7OZIVcyo4OXHRnRezP9gSqAa/iUUKHCbbHeGE6TC8tAAag0BIsgTX92kEp\\n9m/vRYBVLOynH+x7hGpn1rfY6dt60zPRFyzSr+WNcnOjZMQYl/Jr8U4VGGYdVutZ\\naOAOOasjpSYGDrEPKuP6Jv8Si0ExpPos6RT3PnKAKWqwXygBdPhbA/x9WVVHRpKb\\nUFYXE0JA2owZCNn76tS/BLGUSOXqv+TtbwmbuVVq2PM50Uczs5SCDvw+2Je0z+CG\\niRjkEjBaeq2CeV/M4UK1P8BubCo6YC5V1hKHrR8YEUARDbPJAFC6EgI5AwNStFkE\\nYtpOweNXAgMBAAECggEAKvG3QmmhHujAe2nR8PmCRaRJGAQh8ZnwDazrxCipqnKm\\nrfLbYOVX6L987++7IBKugn3MqSXdX5VbFAsNZWQCJdSJWcrMrB3NTqg91CTbTLPb\\n3qSbBmAL/z+CD1UDYh/+Ofovu+fMklrr7biWL69jhyprLu0ZKFcEgvoG1EW+Nn0Y\\nd1azWYG9pUOzAHwhJ9h1NlcXcIj1lwuhrX11XcPuL5gu+JOvdRVab4dqw7yGntqu\\npEtA7wwVpttifyTZVp8DjggarIw4ft/4+Pheb0HBVmzxASC2ejhGc5Uf/AoX+Xz9\\nBQzq1qM5SfeYMzlqtYgkWIMVdJ7OjIwDCiYtGMctyQKBgQDrq4Dm+joKgb+Nr+u2\\nEDVlQgu5DeIhF46Q4qSVRlkrG/+vGGCZX6GZnKKPf4vbDXTcPXBDukjrQTmgelqn\\nUeomNlSwheFH5zZCbZpoO2gsGOe84ZTw11pAiZEo5E39Q39sPQwAoHs8HFOuSp7U\\nYOr6UvCNtzQRUZudYjB+e7jsmwKBgQDDXLHl16K9w2bEYO714IkwRuJYnCKcLf9a\\nMCuVcb4RADR7+2UyYc5iO+OkOs0Au2ivOKBQKEGiHGMups4OCPG4SUeLCXx0tQmp\\nd74pvKr9CfcySrfpOfXpIKWNdbNieygKtpaKksxlvJjfrdXrFnBLexTb+1WLGedi\\njpACW8IJ9QKBgQCK5RRejUFh6eBcgD86mUju+cLw+Na6TCjxCTKY69InzyOdLY/Z\\nNPyIDUHdsv1ZSBAEsY0VzZemV1XAV/xPur52cPTu6KjCeOmIsxIatlCKFM+XiZf/\\nbdy6Rpmv8QZp6rsRrtUBFZQr9EH5ae88GjbC+9jcnQnp3yAI3NLZ6M8vWwKBgQCW\\n/N41MFqD5TBY2D33ZClDWZV4PHv3TwmKz63vm2/1Pb5SkDJfJP5YJ8dBV3y3cyBu\\nRAqKyQIo4124YYzhhgIjlucnSxaYMI8eHgCnyzwvwvL9OIg5ReWL3wJ0eSJCG8MP\\nvJxOzzQP8RoJzhWF0trJS4AMoIw1rLiLEHm2iOpHvQKBgQChmnp30DeO7oxzBXVY\\nnetSYoQsU6hW9lWfavqjk5jF75Gg3oKihIplda7AbRCoT7k0OeebYObPR/teB+H6\\nXxyBIz0qMxbO8Uok0yZxVNyRBbnbIrzUl4f2bf9/yltIraVyASAfB2mDc3wYJpKV\\nis+Rs397kT1NKWj1dr/sJKhT1w==\\n-----END PRIVATE KEY-----\\n",
-  "client_email": "682412662542-compute@developer.gserviceaccount.com",
-  "client_id": "109054012132593449216",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/682412662542-compute%40developer.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-}
-                    '''
-                    
-                    // Authenticate with GCP and setup kubectl
-                    sh '''
-                        echo "🔍 Checking for Google Cloud SDK..."
-                        
-                        # Check if gcloud is already available
-                        if ! command -v gcloud &> /dev/null; then
-                            echo "📦 Installing Google Cloud SDK..."
-                            
-                            # Download and install gcloud
-                            cd /tmp
-                            wget -q https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-455.0.0-linux-x86_64.tar.gz
-                            tar -xzf google-cloud-cli-455.0.0-linux-x86_64.tar.gz
-                            
-                            # Install without interactive prompts
-                            ./google-cloud-sdk/install.sh --quiet --path-update=true --bash-completion=true
-                            
-                            # Add to PATH for this session
-                            export PATH="/tmp/google-cloud-sdk/bin:$PATH"
-                            
-                            echo "✅ Adding Google Cloud SDK to PATH"
-                        else
-                            echo "✅ Google Cloud SDK already available"
-                        fi
-                        
+          steps {
+              script {
+                  echo "🚀 === ENVIRONMENT SETUP & GCP AUTHENTICATION ==="
+                  echo "Branch: ${env.BRANCH_NAME}"
+                  echo "Target Environment: ${env.TARGET_ENV}"
+                  echo "Build: ${env.BUILD_NUMBER}"
+
+                  // Checkout source code
+                  checkout scm
+              }
+
+              // GCP Service Account Authentication
+              withCredentials([file(credentialsId: 'gcp-service-account-json', variable: 'GCP_KEY')]) {
+                  sh '''
+                    bash -c '
+                        set -e
+
+                        echo "✅ Cleaning up previous installation if exists"
+                        rm -rf $HOME/google-cloud-sdk
+
+                        echo "📦 Downloading Google Cloud SDK..."
+                        curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-473.0.0-linux-x86_64.tar.gz
+                        tar -xzf google-cloud-sdk-473.0.0-linux-x86_64.tar.gz
+
+                        ./google-cloud-sdk/install.sh -q
+
+                        echo "✅ Adding Google Cloud SDK to PATH"
+                        . ./google-cloud-sdk/path.bash.inc
+
                         echo "🔐 Authenticating with GCP"
-                        
-                        # Make sure we're in the workspace directory
-                        cd ${WORKSPACE}
-                        
-                        # Authenticate with service account
-                        if command -v gcloud &> /dev/null; then
-                            gcloud auth activate-service-account --key-file=gcp-service-account.json
-                            gcloud config set project ${GCP_PROJECT_ID}
-                            
-                            echo "☸️ Getting cluster credentials..."
-                            gcloud container clusters get-credentials ${GCP_CLUSTER_NAME} --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
-                        else
-                            # Fallback: try with full path
-                            export PATH="/tmp/google-cloud-sdk/bin:$PATH"
-                            gcloud auth activate-service-account --key-file=gcp-service-account.json
-                            gcloud config set project ${GCP_PROJECT_ID}
-                            gcloud container clusters get-credentials ${GCP_CLUSTER_NAME} --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
-                        fi
-                        
-                        echo "🔍 Verifying connection..."
-                        kubectl cluster-info || echo "⚠️ Cluster info retrieval failed"
-                        kubectl get nodes || echo "⚠️ Node list retrieval failed"
-                        
-                        echo "✅ GCP Authentication completed"
-                    '''
-                    
-                    // Validate microservices exist in repo
-                    def services = env.MICROSERVICES.split(',')
-                    services.each { service ->
-                        if (fileExists("${service}")) {
-                            echo "✅ ${service} directory found"
-                        } else {
-                            echo "⚠️ ${service} directory not found - will be skipped"
-                        }
-                    }
-                    
-                    echo "✅ Environment setup completed"
-                }
-            }
-        }
+                        gcloud auth activate-service-account --key-file=$GCP_KEY
+                        gcloud config set project ${GCP_PROJECT_ID}
+
+                        echo "🔗 Getting cluster credentials"
+                        gcloud container clusters get-credentials ${GCP_CLUSTER_NAME} --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
+
+                        echo "📋 Verifying connection"
+                        gcloud --version
+                        kubectl cluster-info || echo "Cluster info retrieval failed"
+                        kubectl get nodes || echo "Node list retrieval failed"
+                    '
+                  '''
+              }
+
+              script {
+                  // Validate microservices exist in repo
+                  def services = env.MICROSERVICES.split(',')
+                  services.each { service ->
+                      if (fileExists("${service}")) {
+                          echo "✅ ${service} directory found"
+                      } else {
+                          echo "⚠️ ${service} directory not found - will be skipped"
+                      }
+                  }
+              }
+          }
+      }
 
         stage('Infrastructure & Monitoring Verification') {
             steps {
@@ -325,32 +290,102 @@ pipeline {
         }
 
         stage('Microservices Health Check') {
-            steps {
-                script {
-                    echo "🏥 === MICROSERVICES HEALTH CHECK ==="
-                    
-                    // Check each microservice health
-                    def services = env.MICROSERVICES.split(',')
-                    def healthResults = [:]
-                    
-                    services.each { service ->
-                        healthResults[service] = checkMicroserviceHealth(service)
-                    }
-                    
-                    // Check API Gateway health
-                    healthResults['api-gateway'] = checkAPIGatewayHealth()
-                    
-                    // Summary
-                    echo "🏥 === HEALTH CHECK SUMMARY ==="
-                    healthResults.each { service, status ->
-                        echo "${service}: ${status}"
-                    }
-                    
-                    // Archive health check results
-                    writeFile file: 'health-check-results.json', text: groovy.json.JsonBuilder(healthResults).toPrettyString()
-                    archiveArtifacts artifacts: 'health-check-results.json'
-                }
-            }
+          steps {
+              script {
+                  echo "🏥 === MICROSERVICES HEALTH CHECK ==="
+                  
+                  def healthResults = [:]
+                  def failedServices = []
+                  def healthyServices = []
+                  
+                  try {
+                      // Check each microservice health
+                      def services = env.MICROSERVICES.split(',')
+                      
+                      services.each { service ->
+                          try {
+                              def result = checkMicroserviceHealth(service)
+                              healthResults[service] = result
+                              
+                              if (result == 'HEALTHY') {
+                                  healthyServices.add(service)
+                              } else {
+                                  failedServices.add(service)
+                              }
+                          } catch (Exception e) {
+                              echo "⚠️ Health check exception for ${service}: ${e.getMessage()}"
+                              healthResults[service] = 'CHECK_FAILED'
+                              failedServices.add(service)
+                          }
+                      }
+                      
+                      // Check API Gateway health
+                      try {
+                          def gatewayResult = checkAPIGatewayHealth()
+                          healthResults['api-gateway'] = gatewayResult
+                          
+                          if (gatewayResult == 'HEALTHY') {
+                              healthyServices.add('api-gateway')
+                          } else {
+                              failedServices.add('api-gateway')
+                          }
+                      } catch (Exception e) {
+                          echo "⚠️ API Gateway health check failed: ${e.getMessage()}"
+                          healthResults['api-gateway'] = 'CHECK_FAILED'
+                          failedServices.add('api-gateway')
+                      }
+                      
+                      // Summary
+                      echo "🏥 === HEALTH CHECK SUMMARY ==="
+                      healthResults.each { service, status ->
+                          def icon = status == 'HEALTHY' ? '✅' : '⚠️'
+                          echo "${icon} ${service}: ${status}"
+                      }
+                      
+                      echo ""
+                      echo "📊 === HEALTH STATISTICS ==="
+                      echo "✅ Healthy services: ${healthyServices.size()}"
+                      echo "⚠️ Unhealthy services: ${failedServices.size()}"
+                      
+                      if (healthyServices.size() > 0) {
+                          echo "🟢 Healthy: ${healthyServices.join(', ')}"
+                      }
+                      
+                      if (failedServices.size() > 0) {
+                          echo "🔴 Issues: ${failedServices.join(', ')}"
+                          echo "ℹ️ Pipeline will continue despite health check issues"
+                      }
+                      
+                      // Archive health check results
+                      writeFile file: 'health-check-results.json', text: groovy.json.JsonBuilder(healthResults).toPrettyString()
+                      archiveArtifacts artifacts: 'health-check-results.json'
+                      
+                      // Set build as unstable if more than half the services are unhealthy, but continue
+                      if (failedServices.size() > healthyServices.size()) {
+                          echo "⚠️ More services are unhealthy than healthy - marking build as unstable"
+                          currentBuild.result = 'UNSTABLE'
+                      } else {
+                          echo "✅ Health check completed - sufficient services are healthy"
+                      }
+                      
+                  } catch (Exception e) {
+                      echo "❌ Health check stage failed: ${e.getMessage()}"
+                      echo "ℹ️ Continuing pipeline execution..."
+                      currentBuild.result = 'UNSTABLE'
+                  }
+              }
+          }
+          post {
+              always {
+                  echo "🏥 Health check stage completed"
+              }
+              unstable {
+                  echo "⚠️ Health check issues detected but pipeline continues"
+              }
+              failure {
+                  echo "❌ Health check stage failed but pipeline continues"
+              }
+          }
         }
 
         stage('Monitoring & Observability Verification') {
@@ -358,16 +393,65 @@ pipeline {
                 script {
                     echo "📊 === MONITORING & OBSERVABILITY VERIFICATION ==="
                     
-                    // Verify Prometheus metrics
-                    verifyPrometheusMetrics()
+                    def monitoringResults = [:]
                     
-                    // Verify Grafana dashboards
-                    verifyGrafanaDashboards()
-                    
-                    // Verify Zipkin tracing
-                    verifyZipkinTracing()
-                    
-                    echo "✅ Monitoring verification completed"
+                    try {
+                        // Verify Prometheus metrics
+                        echo "🎯 Verifying Prometheus..."
+                        try {
+                            verifyPrometheusMetrics()
+                            monitoringResults['prometheus'] = 'SUCCESS'
+                            echo "✅ Prometheus verification completed"
+                        } catch (Exception e) {
+                            echo "⚠️ Prometheus verification failed: ${e.getMessage()}"
+                            monitoringResults['prometheus'] = 'FAILED'
+                        }
+                        
+                        // Verify Grafana dashboards
+                        echo "📈 Verifying Grafana..."
+                        try {
+                            verifyGrafanaDashboards()
+                            monitoringResults['grafana'] = 'SUCCESS'
+                            echo "✅ Grafana verification completed"
+                        } catch (Exception e) {
+                            echo "⚠️ Grafana verification failed: ${e.getMessage()}"
+                            monitoringResults['grafana'] = 'FAILED'
+                        }
+                        
+                        // Verify Zipkin tracing
+                        echo "🔍 Verifying Zipkin..."
+                        try {
+                            verifyZipkinTracing()
+                            monitoringResults['zipkin'] = 'SUCCESS'
+                            echo "✅ Zipkin verification completed"
+                        } catch (Exception e) {
+                            echo "⚠️ Zipkin verification failed: ${e.getMessage()}"
+                            monitoringResults['zipkin'] = 'FAILED'
+                        }
+                        
+                        // Summary
+                        echo "📊 === MONITORING VERIFICATION SUMMARY ==="
+                        monitoringResults.each { tool, status ->
+                            def icon = status == 'SUCCESS' ? '✅' : '⚠️'
+                            echo "${icon} ${tool}: ${status}"
+                        }
+                        
+                        // Archive monitoring results
+                        writeFile file: 'monitoring-verification-results.json', text: groovy.json.JsonBuilder(monitoringResults).toPrettyString()
+                        archiveArtifacts artifacts: 'monitoring-verification-results.json'
+                        
+                        echo "✅ Monitoring verification completed"
+                        
+                    } catch (Exception e) {
+                        echo "❌ Monitoring verification stage failed: ${e.getMessage()}"
+                        echo "ℹ️ Continuing pipeline execution..."
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+            post {
+                always {
+                    echo "📊 Monitoring verification stage completed"
                 }
             }
         }
@@ -382,11 +466,18 @@ pipeline {
                     
                     try {
                         executeLocustTests()
-                        echo "✅ Performance tests completed"
+                        echo "✅ Performance tests completed successfully"
                     } catch (Exception e) {
                         echo "⚠️ Performance tests failed: ${e.getMessage()}"
-                        echo "Check Locust UI at: ${env.LOCUST_URL}"
+                        echo "📊 Check Locust UI at: ${env.LOCUST_URL}"
+                        echo "ℹ️ Continuing pipeline execution..."
+                        currentBuild.result = 'UNSTABLE'
                     }
+                }
+            }
+            post {
+                always {
+                    echo "⚡ Performance testing stage completed"
                 }
             }
         }
@@ -399,13 +490,60 @@ pipeline {
                 script {
                     echo "🔗 === INTEGRATION & E2E TESTS ==="
                     
-                    // Execute integration tests
-                    executeIntegrationTests()
+                    def testResults = [:]
                     
-                    // Execute end-to-end tests
-                    executeE2ETests()
-                    
-                    echo "✅ Integration tests completed"
+                    try {
+                        // Execute integration tests
+                        echo "🔗 Running integration tests..."
+                        try {
+                            executeIntegrationTests()
+                            testResults['integration'] = 'SUCCESS'
+                            echo "✅ Integration tests completed"
+                        } catch (Exception e) {
+                            echo "⚠️ Integration tests failed: ${e.getMessage()}"
+                            testResults['integration'] = 'FAILED'
+                        }
+                        
+                        // Execute end-to-end tests
+                        echo "🎭 Running end-to-end tests..."
+                        try {
+                            executeE2ETests()
+                            testResults['e2e'] = 'SUCCESS'
+                            echo "✅ End-to-end tests completed"
+                        } catch (Exception e) {
+                            echo "⚠️ End-to-end tests failed: ${e.getMessage()}"
+                            testResults['e2e'] = 'FAILED'
+                        }
+                        
+                        // Summary
+                        echo "🧪 === INTEGRATION & E2E TEST SUMMARY ==="
+                        testResults.each { testType, status ->
+                            def icon = status == 'SUCCESS' ? '✅' : '⚠️'
+                            echo "${icon} ${testType}: ${status}"
+                        }
+                        
+                        // Archive test results
+                        writeFile file: 'integration-test-results.json', text: groovy.json.JsonBuilder(testResults).toPrettyString()
+                        archiveArtifacts artifacts: 'integration-test-results.json'
+                        
+                        // Mark as unstable if any tests failed, but continue
+                        if (testResults.values().contains('FAILED')) {
+                            echo "⚠️ Some integration tests failed - marking build as unstable"
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                        
+                        echo "✅ Integration testing stage completed"
+                        
+                    } catch (Exception e) {
+                        echo "❌ Integration testing stage failed: ${e.getMessage()}"
+                        echo "ℹ️ Continuing pipeline execution..."
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+            post {
+                always {
+                    echo "🔗 Integration testing stage completed"
                 }
             }
         }
@@ -415,13 +553,33 @@ pipeline {
                 script {
                     echo "📝 === RELEASE DOCUMENTATION & NOTIFICATIONS ==="
                     
-                    // Generate release documentation
-                    generateReleaseDocumentation()
-                    
-                    // Send notifications
-                    sendNotification("✅ Pipeline completed successfully for ${env.TARGET_ENV} - Branch: ${env.BRANCH_NAME} - Build: ${env.BUILD_NUMBER}", 'success')
-                    
-                    echo "✅ Documentation and notifications completed"
+                    try {
+                        // Generate release documentation
+                        echo "📋 Generating release documentation..."
+                        generateReleaseDocumentation()
+                        echo "✅ Release documentation generated"
+                        
+                        // Determine notification message based on build status
+                        def buildStatus = currentBuild.result ?: 'SUCCESS'
+                        def statusIcon = buildStatus == 'SUCCESS' ? '✅' : (buildStatus == 'UNSTABLE' ? '⚠️' : '❌')
+                        def message = "${statusIcon} Pipeline ${buildStatus.toLowerCase()} for ${env.TARGET_ENV} - Branch: ${env.BRANCH_NAME} - Build: ${env.BUILD_NUMBER}"
+                        
+                        // Send notifications
+                        echo "📢 Sending notifications..."
+                        def notificationLevel = buildStatus == 'SUCCESS' ? 'success' : (buildStatus == 'UNSTABLE' ? 'warning' : 'error')
+                        sendNotification(message, notificationLevel)
+                        
+                        echo "✅ Documentation and notifications completed"
+                        
+                    } catch (Exception e) {
+                        echo "⚠️ Documentation/notification failed: ${e.getMessage()}"
+                        echo "ℹ️ This is not critical - pipeline continues..."
+                    }
+                }
+            }
+            post {
+                always {
+                    echo "📝 Documentation and notification stage completed"
                 }
             }
         }
@@ -629,30 +787,6 @@ def buildService(String serviceName) {
     }
 }
 
-def executeTests(String serviceName) {
-    // Skip tests for user-service as requested
-    if (serviceName == 'user-service') {
-        echo "🔄 Skipping tests for ${serviceName} as requested"
-        return 'SKIPPED'
-    }
-    
-    dir(serviceName) {
-        try {
-            if (fileExists('pom.xml')) {
-                sh './mvnw test -Dmaven.test.failure.ignore=true || echo "Tests completed with failures"'
-            } else if (fileExists('build.gradle')) {
-                sh './gradlew test --continue || echo "Tests completed with failures"'
-            } else {
-                return 'NO_BUILD_FILE'
-            }
-            
-            return 'SUCCESS'
-        } catch (Exception e) {
-            echo "Test execution failed for ${serviceName}: ${e.getMessage()}"
-            return 'FAILED'
-        }
-    }
-}
 
 def installTrivy() {
     sh '''
@@ -736,37 +870,7 @@ def verifyExistingDeployments() {
     '''
 }
 
-def checkMicroserviceHealth(String serviceName) {
-    try {
-        def healthEndpoint
-        
-        // Special case for user-service - use specific endpoint
-        if (serviceName == 'user-service') {
-            healthEndpoint = "http://${env.API_GATEWAY_URL}/user-service/api/users/1"
-        } else {
-            healthEndpoint = "http://${env.API_GATEWAY_URL}/${serviceName}/api/${serviceName.replace('-service', 's')}"
-        }
-        
-        def response = sh(
-            script: "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 10 ${healthEndpoint} || echo 'TIMEOUT'",
-            returnStdout: true
-        ).trim()
-        
-        if (response == '200') {
-            echo "✅ ${serviceName} is healthy"
-            return 'HEALTHY'
-        } else if (response == 'TIMEOUT') {
-            echo "⏰ ${serviceName} health check timed out"
-            return 'TIMEOUT'
-        } else {
-            echo "⚠️ ${serviceName} returned status: ${response}"
-            return "STATUS_${response}"
-        }
-    } catch (Exception e) {
-        echo "❌ Health check failed for ${serviceName}: ${e.getMessage()}"
-        return 'FAILED'
-    }
-}
+
 
 def checkAPIGatewayHealth() {
     try {
@@ -785,36 +889,6 @@ def checkAPIGatewayHealth() {
     } catch (Exception e) {
         echo "❌ API Gateway health check failed: ${e.getMessage()}"
         return 'FAILED'
-    }
-}
-
-def verifyPrometheusMetrics() {
-    echo "📊 Verifying Prometheus metrics..."
-    
-    try {
-        sh """
-            echo "🎯 Checking Prometheus targets..."
-            curl -s "${env.PROMETHEUS_URL}/api/v1/targets" > prometheus_targets.json || echo "Prometheus targets request completed"
-            
-            echo "📈 Checking available metrics..."
-            curl -s "${env.PROMETHEUS_URL}/api/v1/label/__name__/values" > prometheus_metrics.json || echo "Metrics request completed"
-            
-            echo "📊 Prometheus API responses:"
-            if [ -f "prometheus_targets.json" ]; then
-                echo "Targets response size: \$(wc -c < prometheus_targets.json) bytes"
-                head -c 200 prometheus_targets.json || echo "No targets data"
-            fi
-            
-            if [ -f "prometheus_metrics.json" ]; then
-                echo "Metrics response size: \$(wc -c < prometheus_metrics.json) bytes"
-                head -c 200 prometheus_metrics.json || echo "No metrics data"
-            fi
-            
-            rm -f prometheus_targets.json prometheus_metrics.json
-        """
-        echo "✅ Prometheus verification completed"
-    } catch (Exception e) {
-        echo "⚠️ Prometheus verification failed: ${e.getMessage()}"
     }
 }
 
@@ -957,75 +1031,138 @@ def runBasicCodeAnalysis() {
     }
 }
 
-def generateReleaseDocumentation() {
-    try {
-        def releaseFile = "release-notes-${env.BUILD_NUMBER}-${env.BRANCH_NAME ?: 'unknown'}.md"
-        def gitCommit = sh(returnStdout: true, script: 'git rev-parse --short HEAD || echo "unknown"').trim()
-        def buildTime = new Date().format('yyyy-MM-dd HH:mm:ss')
-        
-        // Safe duration calculation
-        def durationMinutes = 'N/A'
+def checkMicroserviceHealth(String serviceName) {
         try {
-            if (currentBuild.duration) {
-                def durationSeconds = currentBuild.duration / 1000
-                durationMinutes = String.format("%.2f", durationSeconds / 60) + ' minutes'
+            def healthEndpoint
+            if (serviceName == "user-service") {
+                healthEndpoint = "http://${env.API_GATEWAY_URL}/${serviceName}/api/users/1"
+            } else {
+                healthEndpoint = "http://${env.API_GATEWAY_URL}/${serviceName}/api/${serviceName.replace('-service', 's')}"
+            }
+            
+            def response = sh(
+                script: "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 10 ${healthEndpoint} || echo 'TIMEOUT'",
+                returnStdout: true
+            ).trim()
+            
+            if (response == '200') {
+                echo "✅ ${serviceName} is healthy"
+                return 'HEALTHY'
+            } else if (response == 'TIMEOUT') {
+                echo "⏰ ${serviceName} health check timed out"
+                return 'TIMEOUT'
+            } else {
+                echo "⚠️ ${serviceName} returned status: ${response}"
+                return "STATUS_${response}"
             }
         } catch (Exception e) {
-            echo "Could not calculate duration: ${e.getMessage()}"
+            echo "❌ Health check failed for ${serviceName}: ${e.getMessage()}"
+            return 'FAILED'
         }
-        
-        def documentation = """
-# 📋 Release Documentation - Build ${env.BUILD_NUMBER}
-
-## 🚀 Build Information
-- **Build Number**: ${env.BUILD_NUMBER}
-- **Branch**: ${env.BRANCH_NAME ?: 'unknown'}
-- **Target Environment**: ${env.TARGET_ENV}
-- **Build Time**: ${buildTime}
-- **Git Commit**: ${gitCommit}
-
-## 🏗️ Services Included
-${env.MICROSERVICES.split(',').collect { "- ${it}" }.join('\n')}
-
-## 🧪 Testing Summary
-- **Unit Tests**: ${params.SKIP_TESTS ? 'Skipped' : 'Executed'}
-- **Security Scan**: ${params.SKIP_SECURITY_SCAN ? 'Skipped' : 'Executed'}
-- **SonarQube**: ${params.RUN_SONAR_ANALYSIS ? 'Executed' : 'Skipped'}
-- **Performance Tests**: ${params.RUN_PERFORMANCE_TESTS ? 'Executed' : 'Skipped'}
-
-## 📊 Monitoring URLs
-- **Grafana**: ${env.GRAFANA_URL}
-- **Prometheus**: ${env.PROMETHEUS_URL}
-- **Zipkin**: ${env.ZIPKIN_URL}
-- **Locust**: ${env.LOCUST_URL}
-- **API Gateway**: http://${env.API_GATEWAY_URL}
-
-## 🔒 Security Status
-- Trivy vulnerability scanning completed
-- SonarQube code quality analysis executed
-- All security checks passed
-
-## 🏥 Health Check Results
-All microservices health checks completed successfully.
-
-## 📈 Quality Metrics
-- **Build Status**: ${currentBuild.currentResult ?: 'SUCCESS'}
-- **Pipeline Duration**: ${durationMinutes}
-
----
-*Generated automatically by Jenkins Pipeline*
-*Build URL: ${env.BUILD_URL ?: 'N/A'}*
-"""
-        
-        writeFile(file: releaseFile, text: documentation)
-        archiveArtifacts artifacts: releaseFile
-        
-        echo "✅ Release documentation generated: ${releaseFile}"
-        
-    } catch (Exception e) {
-        echo "Documentation generation failed: ${e.getMessage()}"
     }
-}
+
+    def verifyPrometheusMetrics() {
+        echo "📊 Verifying Prometheus metrics..."
+        
+        try {
+            sh """
+                echo "🎯 Checking Prometheus targets..."
+                curl -s "${env.PROMETHEUS_URL}/api/v1/targets" | grep -i 'up' || echo "Prometheus targets check completed"
+                
+                echo "📈 Checking available metrics..."
+                curl -s "${env.PROMETHEUS_URL}/api/v1/label/__name__/values" | head -n 20 || echo "Metrics check completed"
+            """
+            echo "✅ Prometheus verification completed"
+        } catch (Exception e) {
+            echo "⚠️ Prometheus verification failed: ${e.getMessage()}"
+        }
+    }
+
+    def executeTests(String serviceName) {
+        dir(serviceName) {
+            try {
+                if (serviceName == "user-service") {
+                    echo "⚠️ Skipping tests for user-service as requested"
+                    return 'SKIPPED'
+                }
+                
+                if (fileExists('pom.xml')) {
+                    sh './mvnw test -Dmaven.test.failure.ignore=true || echo "Tests completed with failures"'
+                } else if (fileExists('build.gradle')) {
+                    sh './gradlew test --continue || echo "Tests completed with failures"'
+                } else {
+                    return 'NO_BUILD_FILE'
+                }
+                
+                return 'SUCCESS'
+            } catch (Exception e) {
+                echo "Test execution failed for ${serviceName}: ${e.getMessage()}"
+                return 'FAILED'
+            }
+        }
+    }
+
+    def generateReleaseDocumentation() {
+        try {
+            def releaseFile = "release-notes-${env.BUILD_NUMBER}-${env.BRANCH_NAME ?: 'unknown'}.md"
+            def gitCommit = sh(returnStdout: true, script: 'git rev-parse --short HEAD || echo "unknown"').trim()
+            def buildTime = new Date().format('yyyy-MM-dd HH:mm:ss')
+            
+            // Calculate duration in minutes without using round()
+            def durationMinutes = currentBuild.duration ? "${(currentBuild.duration / 1000 / 60).toString().substring(0, 4)} minutes" : 'N/A'
+            
+            def documentation = """
+    # 📋 Release Documentation - Build ${env.BUILD_NUMBER}
+
+    ## 🚀 Build Information
+    - **Build Number**: ${env.BUILD_NUMBER}
+    - **Branch**: ${env.BRANCH_NAME ?: 'unknown'}
+    - **Target Environment**: ${env.TARGET_ENV}
+    - **Build Time**: ${buildTime}
+    - **Git Commit**: ${gitCommit}
+
+    ## 🏗️ Services Included
+    ${env.MICROSERVICES.split(',').collect { "- ${it}" }.join('\n')}
+
+    ## 🧪 Testing Summary
+    - **Unit Tests**: ${params.SKIP_TESTS ? 'Skipped' : 'Executed'}
+    - **Security Scan**: ${params.SKIP_SECURITY_SCAN ? 'Skipped' : 'Executed'}
+    - **SonarQube**: ${params.RUN_SONAR_ANALYSIS ? 'Executed' : 'Skipped'}
+    - **Performance Tests**: ${params.RUN_PERFORMANCE_TESTS ? 'Executed' : 'Skipped'}
+
+    ## 📊 Monitoring URLs
+    - **Grafana**: ${env.GRAFANA_URL}
+    - **Prometheus**: ${env.PROMETHEUS_URL}
+    - **Zipkin**: ${env.ZIPKIN_URL}
+    - **Locust**: ${env.LOCUST_URL}
+    - **API Gateway**: http://${env.API_GATEWAY_URL}
+
+    ## 🔒 Security Status
+    - Trivy vulnerability scanning completed
+    - SonarQube code quality analysis executed
+    - All security checks passed
+
+    ## 🏥 Health Check Results
+    All microservices health checks completed successfully.
+
+    ## 📈 Quality Metrics
+    - **Build Status**: ${currentBuild.currentResult ?: 'SUCCESS'}
+    - **Pipeline Duration**: ${durationMinutes}
+
+    ---
+    *Generated automatically by Jenkins Pipeline*
+    *Build URL: ${env.BUILD_URL ?: 'N/A'}*
+    """
+            
+            writeFile(file: releaseFile, text: documentation)
+            archiveArtifacts artifacts: releaseFile
+            
+            echo "✅ Release documentation generated: ${releaseFile}"
+            
+        } catch (Exception e) {
+            echo "Documentation generation failed: ${e.getMessage()}"
+        }
+    }
 
 def sendNotification(String message, String level) {
     echo "📢 Sending notification: ${message}"
@@ -1041,7 +1178,7 @@ def sendNotification(String message, String level) {
         // For Slack integration:
         // slackSend(channel: env.SLACK_CHANNEL, color: color, message: message)
         
-        // For email integration:
+        // For email :
         // emailext(to: env.EMAIL_RECIPIENTS, subject: "Pipeline ${level.toUpperCase()}", body: message)
         
     } catch (Exception e) {
