@@ -1,18 +1,8 @@
 terraform {
   required_version = ">= 1.0"
   
- 
-
-  required_providers {
-    google = {
-      source  = "hashicorp/google"
-      version = "~> 5.0"
-    }
-    google-beta = {
-      source  = "hashicorp/google-beta"
-      version = "~> 5.0"
-    }
-  }
+  
+  
 }
 
 # Local values
@@ -39,7 +29,26 @@ module "network" {
   tags = local.common_tags
 }
 
-# Compute Module - SIN DEPENDENCIAS DE DATABASE
+# Database Module
+module "database" {
+  source = "./modules/database"
+  
+  project_id   = var.gcp_project_id
+  region       = var.gcp_region
+  environment  = var.environment
+  project_name = var.project_name
+  
+  network_id = module.network.vpc_id
+  
+  db_instance_tier = var.db_instance_tier
+  db_name         = var.db_name
+  db_user         = var.db_user
+  db_password     = var.db_password
+  
+  tags = local.common_tags
+}
+
+# Compute Module
 module "compute" {
   source = "./modules/compute"
   
@@ -54,12 +63,10 @@ module "compute" {
   
   machine_type = var.machine_type
   
-
-  # Variables temporales para la base de datos
-  db_host     = "localhost"
-  db_name     = "temp_db"
-  db_user     = "temp_user"
-  db_password = "temp_password"
+  db_host     = module.database.db_public_ip
+  db_name     = var.db_name
+  db_user     = var.db_user
+  db_password = var.db_password
   
   tags = local.common_tags
 }
