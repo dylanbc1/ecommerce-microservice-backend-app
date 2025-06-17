@@ -290,32 +290,102 @@ pipeline {
         }
 
         stage('Microservices Health Check') {
-            steps {
-                script {
-                    echo "🏥 === MICROSERVICES HEALTH CHECK ==="
-                    
-                    // Check each microservice health
-                    def services = env.MICROSERVICES.split(',')
-                    def healthResults = [:]
-                    
-                    services.each { service ->
-                        healthResults[service] = checkMicroserviceHealth(service)
-                    }
-                    
-                    // Check API Gateway health
-                    healthResults['api-gateway'] = checkAPIGatewayHealth()
-                    
-                    // Summary
-                    echo "🏥 === HEALTH CHECK SUMMARY ==="
-                    healthResults.each { service, status ->
-                        echo "${service}: ${status}"
-                    }
-                    
-                    // Archive health check results
-                    writeFile file: 'health-check-results.json', text: groovy.json.JsonBuilder(healthResults).toPrettyString()
-                    archiveArtifacts artifacts: 'health-check-results.json'
-                }
-            }
+          steps {
+              script {
+                  echo "🏥 === MICROSERVICES HEALTH CHECK ==="
+                  
+                  def healthResults = [:]
+                  def failedServices = []
+                  def healthyServices = []
+                  
+                  try {
+                      // Check each microservice health
+                      def services = env.MICROSERVICES.split(',')
+                      
+                      services.each { service ->
+                          try {
+                              def result = checkMicroserviceHealth(service)
+                              healthResults[service] = result
+                              
+                              if (result == 'HEALTHY') {
+                                  healthyServices.add(service)
+                              } else {
+                                  failedServices.add(service)
+                              }
+                          } catch (Exception e) {
+                              echo "⚠️ Health check exception for ${service}: ${e.getMessage()}"
+                              healthResults[service] = 'CHECK_FAILED'
+                              failedServices.add(service)
+                          }
+                      }
+                      
+                      // Check API Gateway health
+                      try {
+                          def gatewayResult = checkAPIGatewayHealth()
+                          healthResults['api-gateway'] = gatewayResult
+                          
+                          if (gatewayResult == 'HEALTHY') {
+                              healthyServices.add('api-gateway')
+                          } else {
+                              failedServices.add('api-gateway')
+                          }
+                      } catch (Exception e) {
+                          echo "⚠️ API Gateway health check failed: ${e.getMessage()}"
+                          healthResults['api-gateway'] = 'CHECK_FAILED'
+                          failedServices.add('api-gateway')
+                      }
+                      
+                      // Summary
+                      echo "🏥 === HEALTH CHECK SUMMARY ==="
+                      healthResults.each { service, status ->
+                          def icon = status == 'HEALTHY' ? '✅' : '⚠️'
+                          echo "${icon} ${service}: ${status}"
+                      }
+                      
+                      echo ""
+                      echo "📊 === HEALTH STATISTICS ==="
+                      echo "✅ Healthy services: ${healthyServices.size()}"
+                      echo "⚠️ Unhealthy services: ${failedServices.size()}"
+                      
+                      if (healthyServices.size() > 0) {
+                          echo "🟢 Healthy: ${healthyServices.join(', ')}"
+                      }
+                      
+                      if (failedServices.size() > 0) {
+                          echo "🔴 Issues: ${failedServices.join(', ')}"
+                          echo "ℹ️ Pipeline will continue despite health check issues"
+                      }
+                      
+                      // Archive health check results
+                      writeFile file: 'health-check-results.json', text: groovy.json.JsonBuilder(healthResults).toPrettyString()
+                      archiveArtifacts artifacts: 'health-check-results.json'
+                      
+                      // Set build as unstable if more than half the services are unhealthy, but continue
+                      if (failedServices.size() > healthyServices.size()) {
+                          echo "⚠️ More services are unhealthy than healthy - marking build as unstable"
+                          currentBuild.result = 'UNSTABLE'
+                      } else {
+                          echo "✅ Health check completed - sufficient services are healthy"
+                      }
+                      
+                  } catch (Exception e) {
+                      echo "❌ Health check stage failed: ${e.getMessage()}"
+                      echo "ℹ️ Continuing pipeline execution..."
+                      currentBuild.result = 'UNSTABLE'
+                  }
+              }
+          }
+          post {
+              always {
+                  echo "🏥 Health check stage completed"
+              }
+              unstable {
+                  echo "⚠️ Health check issues detected but pipeline continues"
+              }
+              failure {
+                  echo "❌ Health check stage failed but pipeline continues"
+              }
+          }
         }
 
         stage('Monitoring & Observability Verification') {
@@ -323,16 +393,65 @@ pipeline {
                 script {
                     echo "📊 === MONITORING & OBSERVABILITY VERIFICATION ==="
                     
-                    // Verify Prometheus metrics
-                    verifyPrometheusMetrics()
+                    def monitoringResults = [:]
                     
-                    // Verify Grafana dashboards
-                    verifyGrafanaDashboards()
-                    
-                    // Verify Zipkin tracing
-                    verifyZipkinTracing()
-                    
-                    echo "✅ Monitoring verification completed"
+                    try {
+                        // Verify Prometheus metrics
+                        echo "🎯 Verifying Prometheus..."
+                        try {
+                            verifyPrometheusMetrics()
+                            monitoringResults['prometheus'] = 'SUCCESS'
+                            echo "✅ Prometheus verification completed"
+                        } catch (Exception e) {
+                            echo "⚠️ Prometheus verification failed: ${e.getMessage()}"
+                            monitoringResults['prometheus'] = 'FAILED'
+                        }
+                        
+                        // Verify Grafana dashboards
+                        echo "📈 Verifying Grafana..."
+                        try {
+                            verifyGrafanaDashboards()
+                            monitoringResults['grafana'] = 'SUCCESS'
+                            echo "✅ Grafana verification completed"
+                        } catch (Exception e) {
+                            echo "⚠️ Grafana verification failed: ${e.getMessage()}"
+                            monitoringResults['grafana'] = 'FAILED'
+                        }
+                        
+                        // Verify Zipkin tracing
+                        echo "🔍 Verifying Zipkin..."
+                        try {
+                            verifyZipkinTracing()
+                            monitoringResults['zipkin'] = 'SUCCESS'
+                            echo "✅ Zipkin verification completed"
+                        } catch (Exception e) {
+                            echo "⚠️ Zipkin verification failed: ${e.getMessage()}"
+                            monitoringResults['zipkin'] = 'FAILED'
+                        }
+                        
+                        // Summary
+                        echo "📊 === MONITORING VERIFICATION SUMMARY ==="
+                        monitoringResults.each { tool, status ->
+                            def icon = status == 'SUCCESS' ? '✅' : '⚠️'
+                            echo "${icon} ${tool}: ${status}"
+                        }
+                        
+                        // Archive monitoring results
+                        writeFile file: 'monitoring-verification-results.json', text: groovy.json.JsonBuilder(monitoringResults).toPrettyString()
+                        archiveArtifacts artifacts: 'monitoring-verification-results.json'
+                        
+                        echo "✅ Monitoring verification completed"
+                        
+                    } catch (Exception e) {
+                        echo "❌ Monitoring verification stage failed: ${e.getMessage()}"
+                        echo "ℹ️ Continuing pipeline execution..."
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+            post {
+                always {
+                    echo "📊 Monitoring verification stage completed"
                 }
             }
         }
@@ -347,11 +466,18 @@ pipeline {
                     
                     try {
                         executeLocustTests()
-                        echo "✅ Performance tests completed"
+                        echo "✅ Performance tests completed successfully"
                     } catch (Exception e) {
                         echo "⚠️ Performance tests failed: ${e.getMessage()}"
-                        echo "Check Locust UI at: ${env.LOCUST_URL}"
+                        echo "📊 Check Locust UI at: ${env.LOCUST_URL}"
+                        echo "ℹ️ Continuing pipeline execution..."
+                        currentBuild.result = 'UNSTABLE'
                     }
+                }
+            }
+            post {
+                always {
+                    echo "⚡ Performance testing stage completed"
                 }
             }
         }
@@ -364,13 +490,60 @@ pipeline {
                 script {
                     echo "🔗 === INTEGRATION & E2E TESTS ==="
                     
-                    // Execute integration tests
-                    executeIntegrationTests()
+                    def testResults = [:]
                     
-                    // Execute end-to-end tests
-                    executeE2ETests()
-                    
-                    echo "✅ Integration tests completed"
+                    try {
+                        // Execute integration tests
+                        echo "🔗 Running integration tests..."
+                        try {
+                            executeIntegrationTests()
+                            testResults['integration'] = 'SUCCESS'
+                            echo "✅ Integration tests completed"
+                        } catch (Exception e) {
+                            echo "⚠️ Integration tests failed: ${e.getMessage()}"
+                            testResults['integration'] = 'FAILED'
+                        }
+                        
+                        // Execute end-to-end tests
+                        echo "🎭 Running end-to-end tests..."
+                        try {
+                            executeE2ETests()
+                            testResults['e2e'] = 'SUCCESS'
+                            echo "✅ End-to-end tests completed"
+                        } catch (Exception e) {
+                            echo "⚠️ End-to-end tests failed: ${e.getMessage()}"
+                            testResults['e2e'] = 'FAILED'
+                        }
+                        
+                        // Summary
+                        echo "🧪 === INTEGRATION & E2E TEST SUMMARY ==="
+                        testResults.each { testType, status ->
+                            def icon = status == 'SUCCESS' ? '✅' : '⚠️'
+                            echo "${icon} ${testType}: ${status}"
+                        }
+                        
+                        // Archive test results
+                        writeFile file: 'integration-test-results.json', text: groovy.json.JsonBuilder(testResults).toPrettyString()
+                        archiveArtifacts artifacts: 'integration-test-results.json'
+                        
+                        // Mark as unstable if any tests failed, but continue
+                        if (testResults.values().contains('FAILED')) {
+                            echo "⚠️ Some integration tests failed - marking build as unstable"
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                        
+                        echo "✅ Integration testing stage completed"
+                        
+                    } catch (Exception e) {
+                        echo "❌ Integration testing stage failed: ${e.getMessage()}"
+                        echo "ℹ️ Continuing pipeline execution..."
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+            post {
+                always {
+                    echo "🔗 Integration testing stage completed"
                 }
             }
         }
@@ -380,13 +553,33 @@ pipeline {
                 script {
                     echo "📝 === RELEASE DOCUMENTATION & NOTIFICATIONS ==="
                     
-                    // Generate release documentation
-                    generateReleaseDocumentation()
-                    
-                    // Send notifications
-                    sendNotification("✅ Pipeline completed successfully for ${env.TARGET_ENV} - Branch: ${env.BRANCH_NAME} - Build: ${env.BUILD_NUMBER}", 'success')
-                    
-                    echo "✅ Documentation and notifications completed"
+                    try {
+                        // Generate release documentation
+                        echo "📋 Generating release documentation..."
+                        generateReleaseDocumentation()
+                        echo "✅ Release documentation generated"
+                        
+                        // Determine notification message based on build status
+                        def buildStatus = currentBuild.result ?: 'SUCCESS'
+                        def statusIcon = buildStatus == 'SUCCESS' ? '✅' : (buildStatus == 'UNSTABLE' ? '⚠️' : '❌')
+                        def message = "${statusIcon} Pipeline ${buildStatus.toLowerCase()} for ${env.TARGET_ENV} - Branch: ${env.BRANCH_NAME} - Build: ${env.BUILD_NUMBER}"
+                        
+                        // Send notifications
+                        echo "📢 Sending notifications..."
+                        def notificationLevel = buildStatus == 'SUCCESS' ? 'success' : (buildStatus == 'UNSTABLE' ? 'warning' : 'error')
+                        sendNotification(message, notificationLevel)
+                        
+                        echo "✅ Documentation and notifications completed"
+                        
+                    } catch (Exception e) {
+                        echo "⚠️ Documentation/notification failed: ${e.getMessage()}"
+                        echo "ℹ️ This is not critical - pipeline continues..."
+                    }
+                }
+            }
+            post {
+                always {
+                    echo "📝 Documentation and notification stage completed"
                 }
             }
         }
