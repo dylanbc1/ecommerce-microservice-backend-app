@@ -38,6 +38,8 @@ public class OrderDto implements Serializable {
 	private LocalDateTime orderDate;
 	private String orderDesc;
 	private Double orderFee;
+	private String orderStatus;
+	private Integer userId;
 	
 	@JsonInclude(Include.NON_NULL)
 	private Set<OrderItemDto> orderItemDtos;

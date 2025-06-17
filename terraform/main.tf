@@ -39,25 +39,6 @@ module "network" {
   tags = local.common_tags
 }
 
-# Database Module - COMENTADO
-# module "database" {
-#   source = "./modules/database"
-#   
-#   project_id   = var.gcp_project_id
-#   region       = var.gcp_region
-#   environment  = var.environment
-#   project_name = var.project_name
-#   
-#   network_id = module.network.vpc_id
-#   
-#   db_instance_tier = var.db_instance_tier
-#   db_name         = var.db_name
-#   db_user         = var.db_user
-#   db_password     = var.db_password
-#   
-#   tags = local.common_tags
-# }
-
 # Compute Module - SIN DEPENDENCIAS DE DATABASE
 module "compute" {
   source = "./modules/compute"
@@ -73,12 +54,7 @@ module "compute" {
   
   machine_type = var.machine_type
   
-  # Comentar las referencias a la base de datos
-  # db_host     = module.database.db_public_ip
-  # db_name     = var.db_name
-  # db_user     = var.db_user
-  # db_password = var.db_password
-  
+
   # Variables temporales para la base de datos
   db_host     = "localhost"
   db_name     = "temp_db"
