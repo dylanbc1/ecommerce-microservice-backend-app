@@ -1,0 +1,279 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  labels:
+    app: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    rule_files:
+      - "alert_rules.yml"
+    
+    scrape_configs:
+      # Prometheus self-monitoring
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      
+      # API Gateway directo (para métricas del gateway mismo)
+      - job_name: 'api-gateway-direct'
+        static_configs:
+          - targets: ['api-gateway.ecommerce-dev.svc.cluster.local:8080']
+        metrics_path: '/actuator/prometheus'
+        scrape_interval: 15s
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: service
+            replacement: 'api-gateway'
+          - source_labels: [__address__]
+            target_label: access_method
+            replacement: 'direct'
+            
+      # Microservicios VIA API Gateway
+      - job_name: 'user-service-via-gateway'
+        static_configs:
+          - targets: ['api-gateway.ecommerce-dev.svc.cluster.local:8080']
+        metrics_path: '/user-service/actuator/prometheus'
+        scrape_interval: 20s
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: service
+            replacement: 'user-service'
+          - source_labels: [__address__]
+            target_label: access_method
+            replacement: 'via-gateway'
+            
+      - job_name: 'product-service-via-gateway'
+        static_configs:
+          - targets: ['api-gateway.ecommerce-dev.svc.cluster.local:8080']
+        metrics_path: '/product-service/actuator/prometheus'
+        scrape_interval: 20s
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: service
+            replacement: 'product-service'
+          - source_labels: [__address__]
+            target_label: access_method
+            replacement: 'via-gateway'
+            
+      - job_name: 'order-service-via-gateway'
+        static_configs:
+          - targets: ['api-gateway.ecommerce-dev.svc.cluster.local:8080']
+        metrics_path: '/order-service/actuator/prometheus'
+        scrape_interval: 20s
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: service
+            replacement: 'order-service'
+          - source_labels: [__address__]
+            target_label: access_method
+            replacement: 'via-gateway'
+            
+      - job_name: 'payment-service-via-gateway'
+        static_configs:
+          - targets: ['api-gateway.ecommerce-dev.svc.cluster.local:8080']
+        metrics_path: '/payment-service/actuator/prometheus'
+        scrape_interval: 20s
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: service
+            replacement: 'payment-service'
+          - source_labels: [__address__]
+            target_label: access_method
+            replacement: 'via-gateway'
+            
+      - job_name: 'shipping-service-via-gateway'
+        static_configs:
+          - targets: ['api-gateway.ecommerce-dev.svc.cluster.local:8080']
+        metrics_path: '/shipping-service/actuator/prometheus'
+        scrape_interval: 20s
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: service
+            replacement: 'shipping-service'
+          - source_labels: [__address__]
+            target_label: access_method
+            replacement: 'via-gateway'
+            
+      - job_name: 'favourite-service-via-gateway'
+        static_configs:
+          - targets: ['api-gateway.ecommerce-dev.svc.cluster.local:8080']
+        metrics_path: '/favourite-service/actuator/prometheus'
+        scrape_interval: 20s
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: service
+            replacement: 'favourite-service'
+          - source_labels: [__address__]
+            target_label: access_method
+            replacement: 'via-gateway'
+      
+      # Servicios de infraestructura (acceso directo)
+      - job_name: 'infrastructure-services-direct'
+        static_configs:
+          - targets: 
+            - 'service-discovery.ecommerce-dev.svc.cluster.local:8761'
+            - 'cloud-config.ecommerce-dev.svc.cluster.local:9296'
+            - 'zipkin.monitoring.svc.cluster.local:9411'
+        metrics_path: '/actuator/prometheus'
+        scrape_interval: 30s
+        relabel_configs:
+          - source_labels: [__address__]
+            regex: '([^.]+)\..*'
+            target_label: service
+            replacement: '${1}'
+          - source_labels: [__address__]
+            target_label: access_method
+            replacement: 'direct'
+
+  alert_rules.yml: |
+    groups:
+      - name: microservices-gateway.rules
+        rules:
+          - alert: ServiceDownViaGateway
+            expr: up{access_method="via-gateway"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Service {{ $labels.service }} not accessible via API Gateway"
+              description: "{{ $labels.service }} has been unreachable via API Gateway for more than 2 minutes."
+          
+          - alert: APIGatewayDown
+            expr: up{job="api-gateway-direct"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "API Gateway is down"
+              description: "API Gateway has been down for more than 1 minute. All services are unreachable."
+          
+          - alert: HighResponseTimeViaGateway
+            expr: http_server_requests_seconds{quantile="0.95",access_method="via-gateway"} > 3
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High response time for {{ $labels.service }} via Gateway"
+              description: "95th percentile response time is above 3 seconds via API Gateway."
+          
+          - alert: InfrastructureServiceDown
+            expr: up{access_method="direct"} == 0
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Infrastructure service {{ $labels.service }} is down"
+              description: "{{ $labels.service }} infrastructure service is down."
+          
+          - alert: HighErrorRateViaGateway
+            expr: rate(http_server_requests_total{access_method="via-gateway",status=~"5.."}[5m]) > 0.1
+            for: 3m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High error rate for {{ $labels.service }} via Gateway"
+              description: "Error rate is above 10% for {{ $labels.service }} via API Gateway."
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+      - name: prometheus
+        image: prom/prometheus:v2.40.0
+        args:
+          - '--config.file=/etc/prometheus/prometheus.yml'
+          - '--storage.tsdb.path=/prometheus/'
+          - '--web.console.libraries=/etc/prometheus/console_libraries'
+          - '--web.console.templates=/etc/prometheus/consoles'
+          - '--storage.tsdb.retention.time=200h'
+          - '--web.enable-lifecycle'
+          - '--web.enable-admin-api'
+          - '--web.external-url=http://prometheus:9090'
+        ports:
+        - containerPort: 9090
+          name: prometheus
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: prometheus-config-volume
+          mountPath: /etc/prometheus/
+        - name: prometheus-storage-volume
+          mountPath: /prometheus/
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 15
+      volumes:
+      - name: prometheus-config-volume
+        configMap:
+          defaultMode: 420
+          name: prometheus-config
+      - name: prometheus-storage-volume
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP
+    name: prometheus
+  selector:
+    app: prometheus
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-lb
+  labels:
+    app: prometheus
+    type: external
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP
+    name: prometheus
+  selector:
+    app: prometheus
