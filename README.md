@@ -403,11 +403,5 @@ kubectl apply -f k8s/
 
 Para problemas o preguntas, contactar a:
 
-- **Dylan Bermudez Cardona** - dylan.bermudez@correo.escuelaing.edu.co
-- **Victor Manuel Garzon Meneses** - victor.garzon@correo.escuelaing.edu.co
-
----
-
-**Licencia**: MIT  
-**Última Actualización**: Junio 2023  
-**Versión**: 1.0.0
+- **Dylan Bermudez Cardona**
+- **Victor Manuel Garzon Meneses**
