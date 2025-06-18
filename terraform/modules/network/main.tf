@@ -70,3 +70,35 @@ resource "google_compute_firewall" "allow_http" {
   source_ranges = ["0.0.0.0/0"]
   target_tags   = ["http-server"]
 }
+
+# Regla de firewall para microservicios con acceso externo completo
+resource "google_compute_firewall" "allow_microservices_external" {
+  name    = "${var.project_name}-${var.environment}-allow-microservices-external"
+  network = google_compute_network.vpc.name
+  project = var.project_id
+
+  allow {
+    protocol = "tcp"
+    ports    = [
+      "80",    # Nginx Dashboard
+      "443",   # HTTPS
+      "8080",  # API Gateway
+      "8761",  # Eureka Service Discovery
+      "9411",  # Zipkin Tracing
+      "9296",  # Config Server
+      "8300",  # Order Service
+      "8400",  # Payment Service
+      "8500",  # Product Service
+      "8600",  # Shipping Service
+      "8700",  # User Service
+      "8800",  # Favourite Service
+      "8900",  # Proxy Client
+      "8888"   # Jenkins
+    ]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["microservices", "web-server", "http-server"]
+  
+  description = "Allow external access to all microservices ports"
+}

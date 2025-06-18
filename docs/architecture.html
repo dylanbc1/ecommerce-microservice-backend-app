@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arquitectura E-commerce Microservicios - GCP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: white;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(45deg, #4285f4, #34a853, #fbbc05, #ea4335);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            color: #ccc;
+        }
+
+        .architecture {
+            display: grid;
+            grid-template-rows: auto auto auto auto;
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        /* Internet Layer */
+        .internet-layer {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .internet-layer h3 {
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+        }
+
+        .users {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        .user-icon {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* Load Balancer */
+        .load-balancer {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(240, 147, 251, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* GCP Main Container */
+        .gcp-container {
+            background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(66, 133, 244, 0.4);
+            border: 3px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .gcp-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .gcp-header h2 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        /* VPC Network */
+        .vpc-network {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .vpc-header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .subnets {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .subnet {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .subnet:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .subnet h4 {
+            color: #4fc3f7;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            text-align: center;
+        }
+
+        .services {
+            display: grid;
+            gap: 10px;
+        }
+
+        .service {
+            background: linear-gradient(135deg, #29b6f6 0%, #1e88e5 100%);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .service:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(41, 182, 246, 0.4);
+        }
+
+        .service.gateway {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+        }
+
+        .service.database {
+            background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+        }
+
+        .service.proxy {
+            background: linear-gradient(135deg, #a8e6cf 0%, #88d8a3 100%);
+        }
+
+        /* Security & Monitoring */
+        .security-monitoring {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .security-monitoring h4 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #ffd54f;
+            font-size: 1.4rem;
+        }
+
+        .security-services {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .security-service {
+            background: linear-gradient(135deg, #ffd54f 0%, #ffb74d 100%);
+            color: #333;
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .security-service:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(255, 213, 79, 0.4);
+        }
+
+        /* CI/CD Pipeline */
+        .cicd-pipeline {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .cicd-pipeline h4 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 1.4rem;
+        }
+
+        .pipeline-steps {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .pipeline-step {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            flex: 1;
+            min-width: 120px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .pipeline-step:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        .arrow {
+            font-size: 1.5rem;
+            color: #ffd54f;
+        }
+
+        /* Connections */
+        .connection-line {
+            height: 3px;
+            background: linear-gradient(90deg, #4fc3f7, #29b6f6);
+            margin: 10px 0;
+            border-radius: 2px;
+            animation: flow 2s infinite;
+        }
+
+        @keyframes flow {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .subnets {
+                grid-template-columns: 1fr;
+            }
+            
+            .pipeline-steps {
+                flex-direction: column;
+            }
+            
+            .arrow {
+                transform: rotate(90deg);
+            }
+        }
+
+        /* Legend */
+        .legend {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .legend h4 {
+            margin-bottom: 15px;
+            color: #ffd54f;
+        }
+
+        .legend-items {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Arquitectura E-commerce Microservicios</h1>
+            <p>Plataforma Google Cloud con CI/CD Pipeline - Taller 2</p>
+        </div>
+
+        <div class="architecture">
+            <!-- Internet Layer -->
+            <div class="internet-layer">
+                <h3>🌐 Internet & Usuarios</h3>
+                <div class="users">
+                    <div class="user-icon">👥</div>
+                    <div class="user-icon">💻</div>
+                    <div class="user-icon">📱</div>
+                </div>
+                <p style="margin-top: 15px;">Clientes Web, Mobile y APIs</p>
+            </div>
+
+            <div class="connection-line"></div>
+
+            <!-- Load Balancer -->
+            <div class="load-balancer">
+                <h3>⚖️ Google Cloud Load Balancer</h3>
+                <p>Distribución inteligente de tráfico | SSL/TLS Termination</p>
+            </div>
+
+            <div class="connection-line"></div>
+
+            <!-- GCP Main Container -->
+            <div class="gcp-container">
+                <div class="gcp-header">
+                    <h2>☁️ Google Cloud Platform</h2>
+                    <p>Región: us-central1 | Zona: us-central1-a</p>
+                </div>
+
+                <!-- VPC Network -->
+                <div class="vpc-network">
+                    <div class="vpc-header">
+                        <h3>🔗 VPC Network - E-commerce</h3>
+                        <p>Red privada virtual con subredes segmentadas</p>
+                    </div>
+
+                    <div class="subnets">
+                        <!-- Public Subnet -->
+                        <div class="subnet">
+                            <h4>🌐 Public Subnet (10.0.1.0/24)</h4>
+                            <div class="services">
+                                <div class="service gateway">
+                                    <strong>API Gateway</strong><br>
+                                    Port: 8080<br>
+                                    Routing & Auth
+                                </div>
+                                <div class="service">
+                                    <strong>Load Balancer</strong><br>
+                                    HA & Failover<br>
+                                    Health Checks
+                                </div>
+                                <div class="service">
+                                    <strong>GKE Cluster</strong><br>
+                                    Kubernetes Master<br>
+                                    Auto-scaling
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Private Subnet -->
+                        <div class="subnet">
+                            <h4>🔒 Private Subnet (10.0.2.0/24)</h4>
+                            <div class="services">
+                                <div class="service">
+                                    <strong>User Service</strong><br>
+                                    Port: 8700<br>
+                                    Auth & Profile
+                                </div>
+                                <div class="service">
+                                    <strong>Product Service</strong><br>
+                                    Port: 8500<br>
+                                    Catalog Mgmt
+                                </div>
+                                <div class="service">
+                                    <strong>Order Service</strong><br>
+                                    Port: 8300<br>
+                                    Order Processing
+                                </div>
+                                <div class="service">
+                                    <strong>Payment Service</strong><br>
+                                    Port: 8400<br>
+                                    Payment Gateway
+                                </div>
+                                <div class="service proxy">
+                                    <strong>Proxy Client</strong><br>
+                                    Port: 8900<br>
+                                    Service Mesh
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Database Subnet -->
+                        <div class="subnet">
+                            <h4>🗄️ Database Subnet (10.0.3.0/24)</h4>
+                            <div class="services">
+                                <div class="service database">
+                                    <strong>Cloud SQL</strong><br>
+                                    PostgreSQL 13<br>
+                                    HA & Backups
+                                </div>
+                                <div class="service database">
+                                    <strong>Redis Cache</strong><br>
+                                    In-Memory<br>
+                                    Session Store
+                                </div>
+                                <div class="service database">
+                                    <strong>Cloud Storage</strong><br>
+                                    Backup & Files<br>
+                                    Multi-region
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security & Monitoring -->
+                <div class="security-monitoring">
+                    <h4>🛡️ Security & Monitoring</h4>
+                    <div class="security-services">
+                        <div class="security-service">Cloud IAM</div>
+                        <div class="security-service">Cloud Monitoring</div>
+                        <div class="security-service">Cloud Logging</div>
+                        <div class="security-service">Cloud Armor</div>
+                        <div class="security-service">Cloud KMS</div>
+                    </div>
+                </div>
+
+                <!-- CI/CD Pipeline -->
+                <div class="cicd-pipeline">
+                    <h4>🔄 CI/CD Pipeline - Jenkins + Docker + Kubernetes</h4>
+                    <div class="pipeline-steps">
+                        <div class="pipeline-step">
+                            <strong>📦 Build</strong><br>
+                            Maven + Docker
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="pipeline-step">
+                            <strong>🧪 Test</strong><br>
+                            Unit + Integration
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="pipeline-step">
+                            <strong>🔍 Quality</strong><br>
+                            SonarQube
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="pipeline-step">
+                            <strong>🚀 Deploy</strong><br>
+                            Dev → Stage → Prod
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="pipeline-step">
+                            <strong>📊 Monitor</strong><br>
+                            Prometheus + Grafana
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <h4>📋 Leyenda de Componentes</h4>
+            <div class="legend-items">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);"></div>
+                    <span>API Gateway & Routing</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(135deg, #29b6f6 0%, #1e88e5 100%);"></div>
+                    <span>Microservicios Core</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);"></div>
+                    <span>Bases de Datos</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(135deg, #a8e6cf 0%, #88d8a3 100%);"></div>
+                    <span>Proxy & Service Mesh</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(135deg, #ffd54f 0%, #ffb74d 100%);"></div>
+                    <span>Seguridad & Monitoreo</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
+                    <span>CI/CD Pipeline</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
